@@ -5,7 +5,7 @@ from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from openai import OpenAI
-import pycantonese
+import os
 from datasets import load_dataset
 
 base_url = "https://api.deepseek.com"
@@ -21,6 +21,7 @@ valid_pos_tags = {"ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "N
 def segment_words(pos_prompt, input_sentence):
     attempts = 0
     while True:
+        result = None
         try:
             response = client.chat.completions.create(
                 model=model_id,
@@ -74,7 +75,10 @@ def load_hkcancor(min_tokens, max_tokens):
     return utterances
 
 
-def generate_prompt(segmentation_given):
+def generate_prompt(prompt_version, segmentation_given):
+    with open(f'prompt_v{prompt_version}.txt', 'r') as file:
+        prompt_prefix = file.read()
+
     utterances = load_hkcancor(min_tokens=5, max_tokens=20)
 
     random.seed(42)
@@ -89,39 +93,50 @@ def generate_prompt(segmentation_given):
     ])
 
     # Update the word segmentation prompt with in-context samples
-    pos_prompt = f"""You are an expert at Cantonese word segmentation and POS tagging. Output the segmented words with their parts of speech as JSON arrays. ALWAYS preserve typos, fragmented chunks, and punctuations in the original sentence. Output the parts of speech in the Universal Dependencies v2 tagset with 17 tags:
-ADJ: adjective
-ADP: adposition
-ADV: adverb
-AUX: auxiliary
-CCONJ: coordinating conjunction
-DET: determiner
-INTJ: interjection
-NOUN: noun
-NUM: numeral
-PART: particle
-PRON: pronoun
-PROPN: proper noun
-PUNCT: punctuation
-SCONJ: subordinating conjunction
-SYM: symbol
-VERB: verb
-X: other
-
-{in_context_prompt}"""
+    pos_prompt = f"{prompt_prefix}\n\n{in_context_prompt}"
     
     return pos_prompt
 
 
 if __name__ == "__main__":
-    pos_prompt = generate_prompt(segmentation_given=False)
+    prompt_version = 2
+
+    pos_prompt = generate_prompt(prompt_version=prompt_version, segmentation_given=False)
 
     print(pos_prompt)
 
     test_samples = load_dataset("indiejoseph/cc100-yue")['train']
     test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 100]
 
-    with open(f'outputs/pos_results.jsonl', 'w', encoding='utf-8') as file, open(f'outputs/pos_errors.jsonl', 'w', encoding='utf-8') as error_file:
+    # Create the output directory if it doesn't exist
+    output_dir = f'outputs_v{prompt_version}'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    pos_results_path = f'{output_dir}/pos_results.jsonl'
+    pos_errors_path = f'{output_dir}/pos_errors.jsonl'
+
+    existing_samples = set()
+
+    if os.path.exists(pos_results_path):
+        with open(pos_results_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                result = json.loads(line)
+                existing_samples.add(result['input'])
+
+    if os.path.exists(pos_errors_path):
+        with open(pos_errors_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                error_result = json.loads(line)
+                existing_samples.add(error_result['input'])
+
+    initial_sample_count = len(test_samples)
+    test_samples = [sample for sample in test_samples if sample not in existing_samples]
+    removed_sample_count = initial_sample_count - len(test_samples)
+
+    print(f"Number of samples already generated: {removed_sample_count}")
+
+    with open(pos_results_path, 'a+', encoding='utf-8') as file, open(pos_errors_path, 'a+', encoding='utf-8') as error_file:
         lock = Lock()
         def process_sample(input_sentence):
             pos_result = segment_words(pos_prompt, input_sentence.replace(" ", ""))
