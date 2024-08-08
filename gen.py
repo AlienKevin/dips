@@ -151,17 +151,13 @@ if __name__ == "__main__":
                 with lock:
                     error_file.write(json.dumps(error_result, ensure_ascii=False) + '\n')
                     error_file.flush()
-                result = {
-                    "input": input_sentence,
-                    "result": [(char, "X") for char in list(input_sentence)]
-                }
             else:
                 result = {
                     "input": input_sentence,
                     "result": pos_result
                 }
-            with lock:
-                file.write(json.dumps(result, ensure_ascii=False) + '\n')
-                file.flush()
+                with lock:
+                    file.write(json.dumps(result, ensure_ascii=False) + '\n')
+                    file.flush()
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             list(tqdm(executor.map(process_sample, test_samples), total=len(test_samples)))
