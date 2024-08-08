@@ -42,6 +42,21 @@ def load_ud_yue():
 
     return utterances
 
+def load_cc100_yue_test():
+    from datasets import load_dataset
+
+    # Load the cc100 dataset from Hugging Face
+    dataset = load_dataset('AlienKevin/cc100-yue-tagged')
+
+    label_names = dataset["test"].features["pos_tags_ud"].feature.names
+    id2label = { i:k for i, k in enumerate(label_names) }
+
+    utterances = []
+    for item in dataset['test']:
+        utterances.append([(token, id2label[pos]) for token, pos in zip(item['tokens'], item['pos_tags_ud'])])
+
+    return utterances
+
 # Patches https://github.com/jacksonllee/pycantonese/issues/48
 def patch_pycantonese_tag_bug(tag):
     if tag == "V":
@@ -51,9 +66,13 @@ def patch_pycantonese_tag_bug(tag):
 
 
 if __name__ == "__main__":
+    # model_name = "AlienKevin/bert_base_cantonese_pos_hkcancor"
+    model_name = "AlienKevin/electra_hongkongese_small_pos_hkcancor"
+
     sample_size = 100
 
     testing_samples = load_ud_yue()
+    # testing_samples = load_cc100_yue_test()
 
     random.seed(42)
     random.shuffle(testing_samples)
@@ -61,7 +80,7 @@ if __name__ == "__main__":
 
     tagger = pipeline(
         "token-classification",
-        "AlienKevin/bert_base_cantonese_pos_hkcancor",
+        model_name,
         grouped_entities=True,
     )
 
@@ -90,7 +109,6 @@ if __name__ == "__main__":
     results = scorer.score(examples)
 
     print(f"POS Tagging Accuracy: {results['pos_acc']}")
-    print(f"Token Accuracy: {results['token_acc']}")
     print(f"Token F1 Score: {results['token_f']}")
     print(f"Token Precision: {results['token_p']}")
     print(f"Token Recall: {results['token_r']}")
