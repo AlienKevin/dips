@@ -32,3 +32,10 @@ POS Tagging Accuracy: 0.7396593673965937
 Token F1 Score: 0.8674980514419329
 Token Precision: 0.8854415274463007
 Token Recall: 0.8502673796791443
+
+hkcancor_pos_perceptron_window_5_one_hot.pth
+
+POS Tagging Accuracy: 0.6700547302580141
+Token F1 Score: 0.8016560030109146
+Token Precision: 0.7900593471810089
+Token Recall: 0.813598166539343
