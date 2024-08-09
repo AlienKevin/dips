@@ -39,3 +39,10 @@ POS Tagging Accuracy: 0.6700547302580141
 Token F1 Score: 0.8016560030109146
 Token Precision: 0.7900593471810089
 Token Recall: 0.813598166539343
+
+cc100_pos_perceptron_window_5_one_hot
+
+POS Tagging Accuracy: 0.6991290577988916
+Token F1 Score: 0.822857142857143
+Token Precision: 0.8206686930091185
+Token Recall: 0.825057295645531

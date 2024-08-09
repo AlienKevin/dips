@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, IterableDataset
 from datasets import load_dataset
 import random
+from tqdm import tqdm
 
 
 class TaggerDataset(IterableDataset):
@@ -38,7 +39,8 @@ class TaggerDataset(IterableDataset):
                 unk_count += count
                 continue
             vocab[char] = len(vocab)
-        vocab['�'] = len(vocab)
+        if '�' not in vocab:
+            vocab['�'] = len(vocab)
         print(f"Number of characters classified as �: {unk_count}")
         vocab_size = len(vocab)
         one_hot_vocab = {char: torch.nn.functional.one_hot(torch.tensor(idx), num_classes=vocab_size).to(torch.float) for char, idx in vocab.items()}
@@ -123,7 +125,7 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
-        for X, y in train_loader:
+        for X, y in tqdm(train_loader, total=len(train_loader)):
             X = X.to(device)
             y = y.to(device)
             optimizer.zero_grad()
@@ -154,9 +156,7 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
             torch.save(model, f"{model_name}.pth")
 
 
-def load_hkcancor():
-    dataset = load_dataset('nanyang-technological-university-singapore/hkcancor', split='train')
-
+def load_helper(dataset):
     label_names = dataset.features["pos_tags_ud"].feature.names
     id2label = { i:k for i, k in enumerate(label_names) }
 
@@ -177,8 +177,21 @@ def load_hkcancor():
     return tagged_corpus
 
 
-def train(model_name, device):
-    tagged_corpus = load_hkcancor()
+def load_hkcancor():
+    dataset = load_dataset('nanyang-technological-university-singapore/hkcancor', split='train')
+    return load_helper(dataset)
+
+
+def load_cc100():
+    dataset = load_dataset('AlienKevin/cc100-yue-tagged', split='train')
+    return load_helper(dataset)
+
+
+def train(model_name, training_dataset, batch_size, device):
+    if training_dataset == 'hkcancor':
+        tagged_corpus = load_hkcancor()
+    elif training_dataset == 'cc100':
+        tagged_corpus = load_cc100()
 
     print(tagged_corpus[0])
 
@@ -191,13 +204,13 @@ def train(model_name, device):
     window_size = 5
 
     train_dataset = TaggerDataset(train_dataset, window_size)
-    train_loader = DataLoader(train_dataset, batch_size=8)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size)
 
     print('Training dataset vocab size:', len(train_dataset.vocab))
     print('Training dataset tagset size:', len(train_dataset.tagset))
 
     validation_dataset = TaggerDataset(validation_dataset, window_size, vocab=train_dataset.vocab, tagset=train_dataset.tagset)
-    validation_loader = DataLoader(validation_dataset, batch_size=8)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch_size)
     
     model = Tagger(train_dataset.vocab, train_dataset.tagset, window_size).to(device)
     criterion = nn.CrossEntropyLoss()
@@ -280,7 +293,6 @@ def test(model_name, device):
     from spacy.scorer import Scorer
     from spacy.tokens import Doc
     from spacy.vocab import Vocab
-    from tqdm import tqdm
     import json
 
     test_dataset = load_ud_yue()
@@ -325,13 +337,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Train or test the POS tagger model.')
     parser.add_argument('--mode', choices=['train', 'test'], help='Mode to run the script in: train or test')
+    parser.add_argument('--training_dataset', choices=['hkcancor', 'cc100'], help='Training dataset to use')
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = 'hkcancor_pos_perceptron_window_5_one_hot'
+    model_name = f"{args.training_dataset}_pos_perceptron_window_5_one_hot"
 
     if args.mode == 'train':
-        train(model_name, device)
+        train(model_name, args.training_dataset, args.batch_size, device=device)
     elif args.mode == 'test':
         test(model_name, device)
