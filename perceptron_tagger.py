@@ -324,7 +324,7 @@ def test(model_name, device):
 
     with open('errors.jsonl', 'w') as f:
         for error in errors:
-            f.write(json.dumps(error) + '\n')
+            f.write(json.dumps(error, ensure_ascii=False) + '\n')
 
     print(f"POS Tagging Accuracy: {results['pos_acc']}")
     print(f"Token F1 Score: {results['token_f']}")
