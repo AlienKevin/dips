@@ -33,12 +33,19 @@ Token F1 Score: 0.8674980514419329
 Token Precision: 0.8854415274463007
 Token Recall: 0.8502673796791443
 
-hkcancor_pos_perceptron_window_5_one_hot.pth
+hkcancor_pos_perceptron_window_5_one_hot
 
 POS Tagging Accuracy: 0.6700547302580141
 Token F1 Score: 0.8016560030109146
 Token Precision: 0.7900593471810089
 Token Recall: 0.813598166539343
+
+hkcancor_pos_perceptron_window_5_learnable
+
+POS Tagging Accuracy: 0.6616181745715425
+Token F1 Score: 0.7942293090356872
+Token Precision: 0.789433962264151
+Token Recall: 0.799083269671505
 
 cc100_pos_perceptron_window_5_one_hot
 
@@ -46,3 +53,10 @@ POS Tagging Accuracy: 0.6991290577988916
 Token F1 Score: 0.822857142857143
 Token Precision: 0.8206686930091185
 Token Recall: 0.825057295645531
+
+cc100_pos_perceptron_window_5_learnable
+
+POS Tagging Accuracy: 0.7162865146058423
+Token F1 Score: 0.8319263238679968
+Token Precision: 0.8357748650732459
+Token Recall: 0.828113063407181

@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 
 class TaggerDataset(IterableDataset):
-    def __init__(self, data, window_size=5, vocab_threshold=0.999, vocab=None, tagset=None):
+    def __init__(self, data, window_size, vocab_threshold, vocab=None, tagset=None):
         self.data = data
         self.window_size = window_size
         self.vocab_threshold = vocab_threshold
@@ -39,12 +39,11 @@ class TaggerDataset(IterableDataset):
                 unk_count += count
                 continue
             vocab[char] = len(vocab)
-        if '�' not in vocab:
-            vocab['�'] = len(vocab)
-        print(f"Number of characters classified as �: {unk_count}")
-        vocab_size = len(vocab)
-        one_hot_vocab = {char: torch.nn.functional.one_hot(torch.tensor(idx), num_classes=vocab_size).to(torch.float) for char, idx in vocab.items()}
-        return one_hot_vocab
+        if '[UNK]' not in vocab:
+            vocab['[UNK]'] = len(vocab)
+        vocab['[PAD]'] = len(vocab)
+        print(f"Number of characters classified as [UNK]: {unk_count}")
+        return vocab
 
     def build_tagset(self):
         tagset = set()
@@ -53,10 +52,7 @@ class TaggerDataset(IterableDataset):
                 tagset.add(tag)
         tagset = sorted(list(tagset))
         tagset = {tag: idx for idx, tag in enumerate(tagset)}
-        tagset_size = len(tagset)
-        print(tagset)
-        one_hot_tagset = {tag: torch.nn.functional.one_hot(torch.tensor(idx), num_classes=tagset_size).to(torch.float) for tag, idx in tagset.items()}
-        return one_hot_tagset
+        return tagset
 
     def calculate_num_windows(self):
         num_windows = 0
@@ -70,14 +66,13 @@ class TaggerDataset(IterableDataset):
                 start = max(0, i - self.window_size // 2)
                 end = i + self.window_size // 2 + 1
                 window = sentence[start:end]
-                window = [self.vocab.get(char, self.vocab['�']) for char in window]
+                window = [self.vocab.get(char, self.vocab['[UNK]']) for char in window]
                 if len(window) < self.window_size:
                     pad_left = (self.window_size - len(window)) // 2
                     pad_right = self.window_size - len(window) - pad_left
-                    pad_vector = torch.zeros(len(self.vocab))
-                    window = [pad_vector] * pad_left + window + [pad_vector] * pad_right
-                X = torch.cat(window)
-                y = self.tagset[tags[i]]
+                    window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
+                X = torch.tensor(window)
+                y = torch.tensor(self.tagset[tags[i]])
                 yield (X, y)
 
     def __len__(self):
@@ -88,14 +83,26 @@ class TaggerDataset(IterableDataset):
 
 
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, window_size=5):
+    def __init__(self, vocab, tagset, window_size, embedding_type, embedding_dim):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
         self.window_size = window_size
-        self.linear = nn.Linear(len(vocab) * window_size, len(tagset))
+        self.embedding_type = embedding_type
+        if embedding_type == 'one_hot':
+            embedding_dim = len(vocab)
+            self.embedding = nn.Embedding.from_pretrained(torch.eye(embedding_dim).to(torch.float), freeze=True)
+        else:
+            self.embedding = nn.Embedding(len(vocab), embedding_dim)
+        self.linear = nn.Linear(embedding_dim * window_size, len(tagset))
+
+    def get_embedding(self, char):
+        if char not in self.vocab:
+            char = '[UNK]'
+        return self.embedding(torch.tensor(self.vocab[char]).to(device))
 
     def forward(self, x):
+        x = self.embedding(x)
         x = x.view(x.size(0), -1)  # Flatten the input
         return self.linear(x)
     
@@ -105,18 +112,17 @@ class Tagger(nn.Module):
             start = max(0, i - self.window_size // 2)
             end = i + self.window_size // 2 + 1
             window = text[start:end]
-            window = [self.vocab.get(char, self.vocab['�']) for char in window]
+            window = [self.vocab.get(char, self.vocab['[UNK]']) for char in window]
             if len(window) < self.window_size:
                 pad_left = (self.window_size - len(window)) // 2
                 pad_right = self.window_size - len(window) - pad_left
-                pad_vector = torch.zeros(len(self.vocab))
-                window = [pad_vector] * pad_left + window + [pad_vector] * pad_right
-            X = torch.cat(window)
+                window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
+            X = torch.tensor(window)
             # Add a batch dimension
             outputs = self(X.to(device).unsqueeze(0))
             _, predicted = torch.max(outputs, 1)
             tag = list(self.tagset.keys())[predicted.item()]
-            tags.append(((text[i] if text[i] in self.vocab else '�'), tag))
+            tags.append(((text[i] if text[i] in self.vocab else '[UNK]'), tag))
         return tags
 
 
@@ -127,7 +133,7 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
         total_loss = 0
         for X, y in tqdm(train_loader, total=len(train_loader)):
             X = X.to(device)
-            y = y.to(device)
+            y = torch.nn.functional.one_hot(y, num_classes=len(model.tagset)).to(torch.float).to(device)
             optimizer.zero_grad()
             outputs = model(X)
             loss = criterion(outputs.view(-1, outputs.shape[-1]), y.view(-1, y.shape[-1]))
@@ -143,7 +149,7 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
         with torch.no_grad():
             for X_val, y_val in validation_loader:
                 X_val = X_val.to(device)
-                y_val = y_val.to(device)
+                y_val = torch.nn.functional.one_hot(y_val, num_classes=len(model.tagset)).to(torch.float).to(device)
                 outputs_val = model(X_val)
                 loss_val = criterion(outputs_val.view(-1, outputs_val.shape[-1]), y_val.view(-1, y_val.shape[-1]))
                 validation_loss += loss_val.item()
@@ -187,7 +193,7 @@ def load_cc100():
     return load_helper(dataset)
 
 
-def train(model_name, training_dataset, batch_size, device):
+def train(model_name, training_dataset, batch_size, vocab_threshold, embedding_type, embedding_dim, device):
     if training_dataset == 'hkcancor':
         tagged_corpus = load_hkcancor()
     elif training_dataset == 'cc100':
@@ -203,16 +209,18 @@ def train(model_name, training_dataset, batch_size, device):
 
     window_size = 5
 
-    train_dataset = TaggerDataset(train_dataset, window_size)
+    train_dataset = TaggerDataset(train_dataset, window_size, vocab_threshold)
     train_loader = DataLoader(train_dataset, batch_size=batch_size)
+
+    print(train_dataset.tagset)
 
     print('Training dataset vocab size:', len(train_dataset.vocab))
     print('Training dataset tagset size:', len(train_dataset.tagset))
 
-    validation_dataset = TaggerDataset(validation_dataset, window_size, vocab=train_dataset.vocab, tagset=train_dataset.tagset)
+    validation_dataset = TaggerDataset(validation_dataset, window_size, vocab_threshold, vocab=train_dataset.vocab, tagset=train_dataset.tagset)
     validation_loader = DataLoader(validation_dataset, batch_size=batch_size)
     
-    model = Tagger(train_dataset.vocab, train_dataset.tagset, window_size).to(device)
+    model = Tagger(train_dataset.vocab, train_dataset.tagset, window_size, embedding_type, embedding_dim).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -303,6 +311,7 @@ def test(model_name, device):
     test_dataset = test_dataset[:100]
 
     model = torch.load(f"{model_name}.pth", weights_only=False)
+    model.to(device)
     model.eval()
 
     V = Vocab()
@@ -310,7 +319,7 @@ def test(model_name, device):
     errors = []
     for reference in tqdm(test_dataset):
         hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device))
-        reference_tokens = [''.join(char if char in model.vocab.keys() else '�' for char in token) for token, _ in reference]
+        reference_tokens = [''.join(char if char in model.vocab.keys() else '[UNK]' for char in token) for token, _ in reference]
         target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[tag for _, tag in reference])
         predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[tag for _, tag in hypothesis])
         example = Example(predicted_doc, target)
@@ -336,16 +345,20 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Train or test the POS tagger model.')
-    parser.add_argument('--mode', choices=['train', 'test'], help='Mode to run the script in: train or test')
-    parser.add_argument('--training_dataset', choices=['hkcancor', 'cc100'], help='Training dataset to use')
+    parser.add_argument('--mode', choices=['train', 'test'], required=True, help='Mode to run the script in: train or test')
+    parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], required=True, help='Embedding type to use')
+    parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
+    parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
+    parser.add_argument('--training_dataset', choices=['hkcancor', 'cc100'], required=True, help='Training dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"{args.training_dataset}_pos_perceptron_window_5_one_hot"
+    model_name = f"{args.training_dataset}_pos_perceptron_window_5_{args.embedding_type}"
 
     if args.mode == 'train':
-        train(model_name, args.training_dataset, args.batch_size, device=device)
+        train(model_name, training_dataset=args.training_dataset, batch_size=args.batch_size, vocab_threshold=args.vocab_threshold,
+              embedding_type=args.embedding_type, embedding_dim=args.embedding_dim, device=device)
     elif args.mode == 'test':
         test(model_name, device)
