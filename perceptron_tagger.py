@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader, IterableDataset
 from datasets import load_dataset
 import random
 from tqdm import tqdm
+import math
 
 
 class TaggerDataset(IterableDataset):
@@ -82,6 +83,52 @@ class TaggerDataset(IterableDataset):
         return self.prepare_windows()
 
 
+class LanguageModel:
+    def __init__(self, texts, vocab, ngrams):
+        print(texts[0])
+        print(vocab)
+        self.texts = texts
+        self.vocab = vocab
+        self.ngrams = ngrams
+        self.model = self.build_ngram_lm()
+
+    def pad_and_lookup(self, text):
+        pad_token = self.vocab['[PAD]'] if '[PAD]' in self.vocab else len(self.vocab)
+        fallback = self.vocab['[UNK]'] if '[UNK]' in self.vocab else pad_token
+        return [pad_token] * self.ngrams + [self.vocab.get(char, fallback) for char in text] + [pad_token] * self.ngrams
+
+    def build_ngram_lm(self):
+        from collections import defaultdict
+        ngram_counts = defaultdict(lambda: defaultdict(int))
+        total_counts = defaultdict(int)
+
+        for text in tqdm(self.texts, desc="Building n-gram LM"):
+            padded_text = self.pad_and_lookup(text)
+            for i in range(len(padded_text) - self.ngrams):
+                ngram = tuple(padded_text[i:i + self.ngrams])
+                next_char = padded_text[i + self.ngrams]
+                ngram_counts[ngram][next_char] += 1
+                total_counts[ngram] += 1
+
+        vocab_size = len(self.vocab)
+        ngram_probabilities = {ngram: {char: (count + 1) / (total_counts[ngram] + vocab_size) for char, count in next_chars.items()} for ngram, next_chars in ngram_counts.items()}
+        return ngram_probabilities
+
+    def score(self, text):
+        padded_text = self.pad_and_lookup(text)
+        score = 1.0
+        for i in range(len(padded_text) - self.ngrams):
+            ngram = tuple(padded_text[i:i + self.ngrams])
+            next_char = padded_text[i + self.ngrams]
+            if ngram in self.model and next_char in self.model[ngram]:
+                score *= self.model[ngram][next_char]
+            elif ngram in self.model:
+                score *= 1 / (len(self.vocab) + sum(self.model[ngram].values()))  # Add-1 smoothing for unseen ngrams
+            else:
+                score *= 1 / len(self.vocab)  # Handle case where ngram is not in model
+        return score
+
+
 class Tagger(nn.Module):
     def __init__(self, vocab, tagset, window_size, embedding_type, embedding_dim):
         super(Tagger, self).__init__()
@@ -105,9 +152,37 @@ class Tagger(nn.Module):
         x = self.embedding(x)
         x = x.view(x.size(0), -1)  # Flatten the input
         return self.linear(x)
+
+    def decode(self, perceptron_scores, pos_lm, beam_size):
+        if pos_lm is None:
+            # Greedy decoding
+            tag_ids = []
+            for scores in perceptron_scores:
+                _, predicted_tag = torch.max(scores, dim=1)
+                tag_ids.append(predicted_tag.item())
+        else:
+            # Viterbi decoding with beam search incorporating pos_lm.score
+            beam = [(0, [])]  # (score, tag_sequence)
+            for scores in perceptron_scores:
+                scores = torch.log_softmax(scores, dim=1).view(-1)
+                new_beam = []
+                for score, tag_sequence in beam:
+                    for j, tag_score in enumerate(scores):
+                        new_score = score + tag_score.item()
+                        new_tag_sequence = tag_sequence + [j]
+                        # # Incorporate pos_lm.score
+                        # lm_score = pos_lm.score(new_tag_sequence)
+                        # combined_score = new_score + math.log(lm_score)
+                        new_beam.append((new_score, new_tag_sequence))
+                new_beam.sort(key=lambda x: x[0], reverse=True)
+                beam = new_beam[:beam_size]
+            tag_ids = beam[0][1]
+        all_tags = list(self.tagset.keys())
+        return [all_tags[tag_id] for tag_id in tag_ids]
+
     
-    def tag(self, text, device):
-        tags = []
+    def tag(self, text, device, pos_lm=None, beam_size=None):
+        perceptron_scores = []
         for i in range(len(text)):
             start = max(0, i - self.window_size // 2)
             end = i + self.window_size // 2 + 1
@@ -120,10 +195,9 @@ class Tagger(nn.Module):
             X = torch.tensor(window)
             # Add a batch dimension
             outputs = self(X.to(device).unsqueeze(0))
-            _, predicted = torch.max(outputs, 1)
-            tag = list(self.tagset.keys())[predicted.item()]
-            tags.append(((text[i] if text[i] in self.vocab else '[UNK]'), tag))
-        return tags
+            perceptron_scores.append(outputs)
+        tags = self.decode(perceptron_scores, pos_lm, beam_size)
+        return [(text[i] if text[i] in self.vocab else '[UNK]', tag) for i, tag in enumerate(tags)]
 
 
 def train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device):
@@ -193,34 +267,8 @@ def load_cc100():
     return load_helper(dataset)
 
 
-def train(model_name, training_dataset, batch_size, vocab_threshold, embedding_type, embedding_dim, device):
-    if training_dataset == 'hkcancor':
-        tagged_corpus = load_hkcancor()
-    elif training_dataset == 'cc100':
-        tagged_corpus = load_cc100()
-
-    print(tagged_corpus[0])
-
-    random.seed(42)
-    random.shuffle(tagged_corpus)
-
-    validation_dataset = tagged_corpus[:100]
-    train_dataset = tagged_corpus[100:]
-
-    window_size = 5
-
-    train_dataset = TaggerDataset(train_dataset, window_size, vocab_threshold)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size)
-
-    print(train_dataset.tagset)
-
-    print('Training dataset vocab size:', len(train_dataset.vocab))
-    print('Training dataset tagset size:', len(train_dataset.tagset))
-
-    validation_dataset = TaggerDataset(validation_dataset, window_size, vocab_threshold, vocab=train_dataset.vocab, tagset=train_dataset.tagset)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch_size)
-    
-    model = Tagger(train_dataset.vocab, train_dataset.tagset, window_size, embedding_type, embedding_dim).to(device)
+def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, embedding_type, embedding_dim, device):
+    model = Tagger(vocab, tagset, window_size, embedding_type, embedding_dim).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -296,7 +344,7 @@ def merge_tokens(tagged_characters):
 
     return merged_tokens
 
-def test(model_name, device):
+def test(model_name, pos_lm, beam_size, device):
     from spacy.training import Example
     from spacy.scorer import Scorer
     from spacy.tokens import Doc
@@ -318,7 +366,7 @@ def test(model_name, device):
     examples = []
     errors = []
     for reference in tqdm(test_dataset):
-        hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device))
+        hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device, pos_lm, beam_size))
         reference_tokens = [''.join(char if char in model.vocab.keys() else '[UNK]' for char in token) for token, _ in reference]
         target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[tag for _, tag in reference])
         predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[tag for _, tag in hypothesis])
@@ -350,15 +398,41 @@ if __name__ == "__main__":
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
     parser.add_argument('--training_dataset', choices=['hkcancor', 'cc100'], required=True, help='Training dataset to use')
+    parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
+    parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
+    parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"{args.training_dataset}_pos_perceptron_window_5_{args.embedding_type}"
+    model_name = f"{args.training_dataset}_pos_perceptron_window_{args.window_size}_{args.embedding_type}"
+
+    if args.training_dataset == 'hkcancor':
+        training_dataset = load_hkcancor()
+    elif args.training_dataset == 'cc100':
+        training_dataset = load_cc100()
+
+    random.seed(42)
+    random.shuffle(training_dataset)
+
+    validation_dataset = training_dataset[:100]
+    train_dataset = training_dataset[100:]
+
+    train_data = TaggerDataset(train_dataset, args.window_size, args.vocab_threshold)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size)
+
+    print('Training dataset vocab size:', len(train_data.vocab))
+    print('Training dataset tagset size:', len(train_data.tagset))
+
+    validation_data = TaggerDataset(validation_dataset, args.window_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset)
+    validation_loader = DataLoader(validation_data, batch_size=args.batch_size)
+
+    pos_lm = None
+    if args.use_pos_lm:
+        pos_lm = LanguageModel([item[1] for item in train_dataset], train_data.tagset, 2)
 
     if args.mode == 'train':
-        train(model_name, training_dataset=args.training_dataset, batch_size=args.batch_size, vocab_threshold=args.vocab_threshold,
-              embedding_type=args.embedding_type, embedding_dim=args.embedding_dim, device=device)
+        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.embedding_type, args.embedding_dim, device)
     elif args.mode == 'test':
-        test(model_name, device)
+        test(model_name, pos_lm=pos_lm, beam_size=args.beam_size, device=device)
