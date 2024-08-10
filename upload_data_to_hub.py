@@ -42,7 +42,7 @@ combined_data = pos_results + pos_errors
 
 # Filter out entries with inputs containing specific substrings
 raw_length = len(combined_data)
-filtered_data = [entry for entry in combined_data if '嘅發音' not in entry['input'] and 'hotels.com' not in entry['input']]
+filtered_data = [entry for entry in combined_data if '嘅發音' not in entry['input'] and 'Hotels.com' not in entry['input']]
 print(f"Number of low-quality entries filtered: {raw_length - len(filtered_data)}")
 
 # Map the result field to tokens and pos_tags_ud
