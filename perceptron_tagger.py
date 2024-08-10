@@ -91,9 +91,12 @@ class LanguageModel:
         self.vocab = vocab
         self.ngrams = ngrams
         self.model = self.build_ngram_lm()
+    
+    def get_pad_token(self):
+        return self.vocab['[PAD]'] if '[PAD]' in self.vocab else len(self.vocab)
 
     def pad_and_lookup(self, text):
-        pad_token = self.vocab['[PAD]'] if '[PAD]' in self.vocab else len(self.vocab)
+        pad_token = self.get_pad_token()
         fallback = self.vocab['[UNK]'] if '[UNK]' in self.vocab else pad_token
         return [pad_token] * self.ngrams + [self.vocab.get(char, fallback) for char in text] + [pad_token] * self.ngrams
 
@@ -111,7 +114,7 @@ class LanguageModel:
                 total_counts[ngram] += 1
 
         vocab_size = len(self.vocab)
-        ngram_probabilities = {ngram: {char: (count + 1) / (total_counts[ngram] + vocab_size) for char, count in next_chars.items()} for ngram, next_chars in ngram_counts.items()}
+        ngram_probabilities = {ngram: {token: (count + 1) / (total_counts[ngram] + vocab_size) for token, count in next_tokens.items()} for ngram, next_tokens in ngram_counts.items()}
         return ngram_probabilities
 
     def score(self, text):
@@ -120,14 +123,20 @@ class LanguageModel:
         for i in range(len(padded_text) - self.ngrams):
             ngram = tuple(padded_text[i:i + self.ngrams])
             next_char = padded_text[i + self.ngrams]
-            if ngram in self.model and next_char in self.model[ngram]:
-                score *= self.model[ngram][next_char]
-            elif ngram in self.model:
-                score *= 1 / (len(self.vocab) + sum(self.model[ngram].values()))  # Add-1 smoothing for unseen ngrams
-            else:
-                score *= 1 / len(self.vocab)  # Handle case where ngram is not in model
+            score *= self.score_token(ngram, next_char)
         return score
 
+    def score_token(self, prefix, token):
+        if len(prefix) < self.ngrams:
+            ngram = tuple([self.get_pad_token()] * (self.ngrams - len(prefix)) + prefix)
+        else:
+            ngram = tuple(prefix)
+        if ngram in self.model and token in self.model[ngram]:
+            return self.model[ngram][token]
+        elif ngram in self.model:
+            return 1 / (len(self.vocab) + sum(self.model[ngram].values()))  # Add-1 smoothing for unseen ngrams
+        else:
+            return 1 / len(self.vocab)  # Handle case where ngram is not in model
 
 class Tagger(nn.Module):
     def __init__(self, vocab, tagset, window_size, embedding_type, embedding_dim):
@@ -167,13 +176,11 @@ class Tagger(nn.Module):
                 scores = torch.log_softmax(scores, dim=1).view(-1)
                 new_beam = []
                 for score, tag_sequence in beam:
-                    for j, tag_score in enumerate(scores):
+                    for tag, tag_score in enumerate(scores):
                         new_score = score + tag_score.item()
-                        new_tag_sequence = tag_sequence + [j]
-                        # # Incorporate pos_lm.score
-                        # lm_score = pos_lm.score(new_tag_sequence)
-                        # combined_score = new_score + math.log(lm_score)
-                        new_beam.append((new_score, new_tag_sequence))
+                        lm_score = pos_lm.score_token(tag_sequence, tag)
+                        combined_score = new_score + math.log(lm_score)
+                        new_beam.append((combined_score, tag_sequence + [tag]))
                 new_beam.sort(key=lambda x: x[0], reverse=True)
                 beam = new_beam[:beam_size]
             tag_ids = beam[0][1]
