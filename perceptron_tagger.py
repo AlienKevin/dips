@@ -269,9 +269,20 @@ def load_hkcancor():
     return load_helper(dataset)
 
 
-def load_cc100():
-    dataset = load_dataset('AlienKevin/cc100-yue-tagged', split='train')
-    return load_helper(dataset)
+def load_cc100(split='train'):
+    dataset = load_dataset('AlienKevin/cc100-yue-tagged', split=split)
+    if split == 'test':
+        label_names = dataset.features["pos_tags_ud"].feature.names
+        id2label = { i:k for i, k in enumerate(label_names) }
+
+        utterances = []
+        for item in dataset:
+            utterances.append([(token, id2label[pos]) for token, pos in zip(item['tokens'], item['pos_tags_ud'])])
+
+        return utterances
+    else:
+        dataset = load_helper(dataset)
+        return dataset
 
 
 def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, embedding_type, embedding_dim, device):
@@ -306,14 +317,14 @@ def upos_id_to_str(upos_id):
     return names[upos_id]
 
 
-def load_ud_yue():
+def load_ud_yue(split='test'):
     from datasets import load_dataset
 
     # Load the universal_dependencies dataset from Hugging Face
     dataset = load_dataset('universal-dependencies/universal_dependencies', 'yue_hk', trust_remote_code=True)
 
     # Gather all word segmented utterances
-    utterances = [[(token, upos_id_to_str(pos)) for token, pos in zip(sentence['tokens'], sentence['upos'])] for sentence in dataset['test']]
+    utterances = [[(token, upos_id_to_str(pos)) for token, pos in zip(sentence['tokens'], sentence['upos'])] for sentence in dataset[split]]
 
     return utterances
 
@@ -351,14 +362,17 @@ def merge_tokens(tagged_characters):
 
     return merged_tokens
 
-def test(model_name, pos_lm, beam_size, device):
+def test(model_name, test_dataset, pos_lm, beam_size, device):
     from spacy.training import Example
     from spacy.scorer import Scorer
     from spacy.tokens import Doc
     from spacy.vocab import Vocab
     import json
 
-    test_dataset = load_ud_yue()
+    if test_dataset == 'ud_yue':
+        test_dataset = load_ud_yue('test')
+    elif test_dataset == 'cc100':
+        test_dataset = load_cc100('test')
 
     random.seed(42)
     random.shuffle(test_dataset)
@@ -442,4 +456,7 @@ if __name__ == "__main__":
     if args.mode == 'train':
         train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.embedding_type, args.embedding_dim, device)
     elif args.mode == 'test':
-        test(model_name, pos_lm=pos_lm, beam_size=args.beam_size, device=device)
+        print('Testing on UD Yue')
+        test(model_name, 'ud_yue', pos_lm=pos_lm, beam_size=args.beam_size, device=device)
+        print('Testing on CC100')
+        test(model_name, 'cc100', pos_lm=pos_lm, beam_size=args.beam_size, device=device)

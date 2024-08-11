@@ -49,14 +49,32 @@ Token Recall: 0.799083269671505
 
 cc100_pos_perceptron_window_5_one_hot
 
-POS Tagging Accuracy: 0.6991290577988916
-Token F1 Score: 0.822857142857143
-Token Precision: 0.8206686930091185
-Token Recall: 0.825057295645531
+ud_yue
+
+POS Tagging Accuracy: 0.7172523961661342
+Token F1 Score: 0.8403683806600153
+Token Precision: 0.8442559753276793
+Token Recall: 0.8365164247517188
+
+cc100
+
+POS Tagging Accuracy: 0.8138905592303066
+Token F1 Score: 0.8295224312590449
+Token Precision: 0.8295224312590449
+Token Recall: 0.8295224312590449
 
 cc100_pos_perceptron_window_5_learnable
+
+ud_yue
 
 POS Tagging Accuracy: 0.7162865146058423
 Token F1 Score: 0.8319263238679968
 Token Precision: 0.8357748650732459
 Token Recall: 0.828113063407181
+
+cc100
+
+POS Tagging Accuracy: 0.808852508716083
+Token F1 Score: 0.8130624092888243
+Token Precision: 0.8154294032023289
+Token Recall: 0.8107091172214183
