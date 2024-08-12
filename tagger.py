@@ -419,7 +419,7 @@ def merge_tokens(tagged_characters):
 
     return merged_tokens
 
-def test(model_name, test_dataset, pos_lm, beam_size, device):
+def test(model_name, test_dataset, pos_lm, beam_size, segmentation_only, device):
     from spacy.training import Example
     from spacy.scorer import Scorer
     from spacy.tokens import Doc
@@ -430,6 +430,9 @@ def test(model_name, test_dataset, pos_lm, beam_size, device):
         test_dataset = load_ud_yue('test')
     elif test_dataset == 'cc100':
         test_dataset = load_cc100('test')
+
+    if segmentation_only:
+        test_dataset = [[(token, 'X') for token, _ in utterance] for utterance in test_dataset]
 
     random.seed(42)
     random.shuffle(test_dataset)
@@ -483,11 +486,12 @@ if __name__ == "__main__":
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
+    parser.add_argument('--segmentation_only', action='store_true', help='Whether to only segment the text')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{args.training_dataset}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{args.training_dataset}{f'_seg' if args.segmentation_only else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     if args.training_dataset == 'hkcancor':
         training_dataset = load_hkcancor()
@@ -496,6 +500,9 @@ if __name__ == "__main__":
 
     random.seed(42)
     random.shuffle(training_dataset)
+
+    if args.segmentation_only:
+        training_dataset = [(tokens, [tag[:2] + 'X' for tag in tags]) for (tokens, tags) in training_dataset]
 
     validation_dataset = training_dataset[:100]
     train_dataset = training_dataset[100:]
@@ -517,6 +524,6 @@ if __name__ == "__main__":
         train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim, args.autoregressive_scheme, args.network_depth, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
-        test(model_name, 'ud_yue', pos_lm=pos_lm, beam_size=args.beam_size, device=device)
+        test(model_name, 'ud_yue', pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
-        test(model_name, 'cc100', pos_lm=pos_lm, beam_size=args.beam_size, device=device)
+        test(model_name, 'cc100', pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
