@@ -164,7 +164,15 @@ class Tagger(nn.Module):
             self.embedding = nn.Embedding.from_pretrained(torch.eye(embedding_dim).to(torch.float), freeze=True)
         else:
             self.embedding = nn.Embedding(len(vocab), embedding_dim)
-        if network_depth == 2:
+        if network_depth == 3:
+            self.linear = nn.Sequential(
+                nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), embedding_dim),
+                nn.ReLU(),
+                nn.Linear(embedding_dim, embedding_dim),
+                nn.ReLU(),
+                nn.Linear(embedding_dim, len(tagset))
+            )
+        elif network_depth == 2:
             self.linear = nn.Sequential(
                 nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), embedding_dim),
                 nn.ReLU(),

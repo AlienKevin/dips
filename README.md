@@ -192,6 +192,40 @@ Token F1 Score: 0.8895634576467186
 Token Precision: 0.8885359514871499
 Token Recall: 0.8905933429811866
 
+pos_tagger_hkcancor_network_depth_3_window_5_learnable_teacher_forcing_2
+
+ud_yue
+
+POS Tagging Accuracy: 0.7311744049941475
+Token F1 Score: 0.8491493383742911
+Token Precision: 0.8405688622754491
+Token Recall: 0.8579067990832697
+
+cc100
+
+POS Tagging Accuracy: 0.6624537607891492
+Token F1 Score: 0.6848293662173788
+Token Precision: 0.6786018755328218
+Token Recall: 0.6911722141823444
+
+
+pos_tagger_cc100_network_depth_3_window_5_learnable_teacher_forcing_2
+
+ud_yue
+
+POS Tagging Accuracy: 0.7924676343664183
+Token F1 Score: 0.8796331677493312
+Token Precision: 0.8799694189602446
+Token Recall: 0.8792971734148205
+
+cc100
+
+POS Tagging Accuracy: 0.8640776699029127
+Token F1 Score: 0.8823360184119677
+Token Precision: 0.8770374606805833
+Token Recall: 0.887698986975398
+
+
 pos_tagger_hkcancor_seg_network_depth_2_window_5_learnable_teacher_forcing_2
 
 ud_yue
