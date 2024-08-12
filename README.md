@@ -254,3 +254,20 @@ cc100
 Token F1 Score: 0.9067514818562961
 Token Precision: 0.9058347775852109
 Token Recall: 0.9076700434153401
+
+
+pos_tagger_lihkg_network_depth_2_window_5_learnable_teacher_forcing_2
+
+ud_yue
+
+POS Tagging Accuracy: 0.788589292692458
+Token F1 Score: 0.8724781119147317
+Token Precision: 0.8694992412746586
+Token Recall: 0.8754774637127578
+
+cc100
+
+POS Tagging Accuracy: 0.8021358647285672
+Token F1 Score: 0.8114870628376457
+Token Precision: 0.7974294495669181
+Token Recall: 0.8260492040520984

@@ -334,8 +334,8 @@ def load_hkcancor():
     return load_helper(dataset)
 
 
-def load_cc100(split='train'):
-    dataset = load_dataset('AlienKevin/cc100-yue-tagged', split=split)
+def load_tagged_dataset(dataset_name, split='train'):
+    dataset = load_dataset(f'AlienKevin/{dataset_name}-tagged', split=split)
     if split == 'test':
         label_names = dataset.features["pos_tags_ud"].feature.names
         id2label = { i:k for i, k in enumerate(label_names) }
@@ -437,7 +437,9 @@ def test(model_name, test_dataset, pos_lm, beam_size, segmentation_only, device)
     if test_dataset == 'ud_yue':
         test_dataset = load_ud_yue('test')
     elif test_dataset == 'cc100':
-        test_dataset = load_cc100('test')
+        test_dataset = load_tagged_dataset('cc100-yue', 'test')
+    elif test_dataset == 'lihkg':
+        test_dataset = load_tagged_dataset('lihkg', 'test')
 
     if segmentation_only:
         test_dataset = [[(token, 'X') for token, _ in utterance] for utterance in test_dataset]
@@ -486,7 +488,7 @@ if __name__ == "__main__":
     parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], required=True, help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
-    parser.add_argument('--training_dataset', choices=['hkcancor', 'cc100'], required=True, help='Training dataset to use')
+    parser.add_argument('--training_dataset', choices=['hkcancor', 'cc1000', 'lihkg'], required=True, help='Training dataset to use')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
     parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
@@ -504,7 +506,9 @@ if __name__ == "__main__":
     if args.training_dataset == 'hkcancor':
         training_dataset = load_hkcancor()
     elif args.training_dataset == 'cc100':
-        training_dataset = load_cc100()
+        training_dataset = load_tagged_dataset('cc100-yue', 'train')
+    elif args.training_dataset == 'lihkg':
+        training_dataset = load_tagged_dataset('lihkg', 'train')
 
     random.seed(42)
     random.shuffle(training_dataset)
