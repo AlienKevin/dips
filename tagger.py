@@ -244,7 +244,7 @@ class Tagger(nn.Module):
             window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
         X = torch.tensor(window).unsqueeze(0).to(device)
         if self.autoregressive_scheme:
-            return self(X, extra_logits=previous_predictions.to(device))
+            return self(X, extra_logits=previous_predictions.view(1, -1).to(device))
         else:
             return self(X)
 
