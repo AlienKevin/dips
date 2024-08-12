@@ -1,6 +1,12 @@
 from datasets import Dataset, DatasetDict
 import datasets
 import json
+import argparse
+
+
+args = argparse.ArgumentParser()
+args.add_argument('--dataset', type=str, choices=['cc100', 'lihkg'], required=True)
+args = args.parse_args()
 
 
 def read_jsonl(file_path):
@@ -11,8 +17,8 @@ def read_jsonl(file_path):
     return data
 
 # Read the data from the JSONL files
-pos_results = read_jsonl('outputs_v2/pos_results.jsonl')
-pos_errors = read_jsonl('outputs_v2/pos_errors.jsonl')
+pos_results = read_jsonl(f'{args.dataset}_outputs_v2/pos_results.jsonl')
+pos_errors = read_jsonl(f'{args.dataset}_outputs_v2/pos_errors.jsonl')
 
 for entry in pos_results:
     entry['sentence_preserved'] = True
@@ -41,9 +47,14 @@ combined_data = pos_results + pos_errors
 
 
 # Filter out entries with inputs containing specific substrings
-raw_length = len(combined_data)
-filtered_data = [entry for entry in combined_data if '嘅發音' not in entry['input'] and 'Hotels.com' not in entry['input']]
-print(f"Number of low-quality entries filtered: {raw_length - len(filtered_data)}")
+if args.dataset == 'cc100':
+    raw_length = len(combined_data)
+    filtered_data = [entry for entry in combined_data if '嘅發音' not in entry['input'] and 'Hotels.com' not in entry['input']]
+    print(f"Number of low-quality entries filtered: {raw_length - len(filtered_data)}")
+
+
+filtered_data = [entry for entry in combined_data if len(entry['input']) > 0 and len(entry['result']) > 0]
+
 
 # Map the result field to tokens and pos_tags_ud
 for entry in filtered_data:
@@ -83,4 +94,7 @@ pp.pprint(list(dataset_dict["train"].select(range(1))))
 
 
 # Upload to Hugging Face Hub
-dataset_dict.push_to_hub("AlienKevin/cc100-yue-tagged")
+if args.dataset == 'cc100':
+    dataset_dict.push_to_hub("AlienKevin/cc100-yue-tagged")
+elif args.dataset == 'lihkg':
+    dataset_dict.push_to_hub("AlienKevin/lihkg-tagged")
