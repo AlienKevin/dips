@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from openai import OpenAI
 import os
+import argparse
 from datasets import load_dataset
 
 base_url = "https://api.deepseek.com"
@@ -105,11 +106,20 @@ if __name__ == "__main__":
 
     print(pos_prompt)
 
-    test_samples = load_dataset("indiejoseph/cc100-yue")['train']
-    test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 100]
+    args = argparse.ArgumentParser()
+    args.add_argument('--dataset', type=str, choices=['cc100', 'lihkg'], required=True)
+    args = args.parse_args()
+
+    if args.dataset == 'cc100':
+        test_samples = load_dataset("indiejoseph/cc100-yue")['train']
+        test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 100]
+    elif args.dataset == 'lihkg':
+        test_samples = load_dataset("raptorkwok/cantonese_sentences")['train']
+        test_samples.shuffle(seed=42)
+        test_samples = [sample['content'] for sample in test_samples if len(sample['content']) <= 100]
 
     # Create the output directory if it doesn't exist
-    output_dir = f'outputs_v{prompt_version}'
+    output_dir = f'{args.dataset}_outputs_v{prompt_version}'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
