@@ -151,7 +151,7 @@ class LanguageModel:
             return 1 / len(self.vocab)  # Handle case where ngram is not in model
 
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme):
+    def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
@@ -164,7 +164,16 @@ class Tagger(nn.Module):
             self.embedding = nn.Embedding.from_pretrained(torch.eye(embedding_dim).to(torch.float), freeze=True)
         else:
             self.embedding = nn.Embedding(len(vocab), embedding_dim)
-        self.linear = nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), len(tagset))
+        if network_depth == 2:
+            self.linear = nn.Sequential(
+                nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), embedding_dim),
+                nn.ReLU(),
+                nn.Linear(embedding_dim, len(tagset))
+            )
+        elif network_depth == 1:
+            self.linear = nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), len(tagset))
+        else:
+            raise ValueError(f"Invalid network depth: {network_depth}")
 
     def get_embedding(self, char):
         if char not in self.vocab:
@@ -333,8 +342,8 @@ def load_cc100(split='train'):
         return dataset
 
 
-def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, device):
-    model = Tagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme).to(device)
+def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth, device):
+    model = Tagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -472,12 +481,13 @@ if __name__ == "__main__":
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
     parser.add_argument('--autoregressive_scheme', default=None, choices=['teacher_forcing'])
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
+    parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"{args.training_dataset}_pos_perceptron_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"{args.training_dataset}_pos_perceptron{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     if args.training_dataset == 'hkcancor':
         training_dataset = load_hkcancor()
@@ -504,7 +514,7 @@ if __name__ == "__main__":
         pos_lm = LanguageModel([item[1] for item in train_dataset], train_data.tagset, 2)
 
     if args.mode == 'train':
-        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim, args.autoregressive_scheme, device)
+        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim, args.autoregressive_scheme, args.network_depth, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
         test(model_name, 'ud_yue', pos_lm=pos_lm, beam_size=args.beam_size, device=device)
