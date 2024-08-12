@@ -82,7 +82,7 @@ Token Recall: 0.8107091172214183
 
 hkcancor_pos_perceptron_window_5_learnable_teacher_forcing_1
 
-hkcancor
+ud_yue
 
 POS Tagging Accuracy: 0.6834130781499203
 Token F1 Score: 0.8071783123329515
@@ -95,3 +95,35 @@ POS Tagging Accuracy: 0.6365464954355563
 Token F1 Score: 0.6786023678891134
 Token Precision: 0.6770383174877557
 Token Recall: 0.6801736613603473
+
+cc100_pos_perceptron_window_5_learnable_teacher_forcing_1
+
+ud_yue
+
+POS Tagging Accuracy: 0.7229299363057325
+Token F1 Score: 0.838957055214724
+Token Precision: 0.8421862971516552
+Token Recall: 0.8357524828113063
+
+cc100
+
+POS Tagging Accuracy: 0.8214716525934861
+Token F1 Score: 0.8294382348671795
+Token Precision: 0.831974373907979
+Token Recall: 0.826917510853835
+
+cc100_pos_perceptron_window_5_learnable_teacher_forcing_1_pos_lm_beam_size_5
+
+ud_yue
+
+POS Tagging Accuracy: 0.7393403057119871
+Token F1 Score: 0.84984520123839
+Token Precision: 0.8611764705882353
+Token Recall: 0.8388082505729565
+
+cc100
+
+POS Tagging Accuracy: 0.82404603270745
+Token F1 Score: 0.8318274555523171
+Token Precision: 0.8376871147637217
+Token Recall: 0.8260492040520984

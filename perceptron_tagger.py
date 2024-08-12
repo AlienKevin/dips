@@ -211,6 +211,7 @@ class Tagger(nn.Module):
                         if self.autoregressive_scheme:
                             if self.autoregressive_scheme == 'teacher_forcing':
                                 one_hot_prediction = torch.nn.functional.one_hot(torch.tensor(tag), num_classes=len(self.tagset)).to(torch.float).to(device)
+                                one_hot_prediction = one_hot_prediction.unsqueeze(0)
                                 new_prev_preds = self.update_previous_predictions(prev_preds.to(device), one_hot_prediction)
                             else:
                                 new_prev_preds = self.update_previous_predictions(prev_preds.to(device), scores)
