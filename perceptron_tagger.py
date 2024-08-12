@@ -9,7 +9,7 @@ import math
 
 
 class TaggerDataset(IterableDataset):
-    def __init__(self, data, window_size, vocab_threshold, vocab=None, tagset=None):
+    def __init__(self, data, window_size, tag_context_size, vocab_threshold, vocab=None, tagset=None):
         self.data = data
         self.window_size = window_size
         self.vocab_threshold = vocab_threshold
@@ -17,6 +17,7 @@ class TaggerDataset(IterableDataset):
             self.vocab = self.build_vocab()
         else:
             self.vocab = vocab
+        self.tag_context_size = tag_context_size
         if tagset is None:
             self.tagset = self.build_tagset()
         else:
@@ -51,6 +52,8 @@ class TaggerDataset(IterableDataset):
         for sentence, tags in self.data:
             for tag in tags:
                 tagset.add(tag)
+        if self.tag_context_size > 0:
+            tagset.add('[PAD]')
         tagset = sorted(list(tagset))
         tagset = {tag: idx for idx, tag in enumerate(tagset)}
         return tagset
@@ -74,7 +77,16 @@ class TaggerDataset(IterableDataset):
                     window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
                 X = torch.tensor(window)
                 y = torch.tensor(self.tagset[tags[i]])
-                yield (X, y)
+                if self.tag_context_size > 0:
+                    context_tags = tags[max(0, i - self.tag_context_size):i]
+                    if len(context_tags) < self.tag_context_size:
+                        pad_size = self.tag_context_size - len(context_tags)
+                        context_tags = ['[PAD]'] * pad_size + context_tags
+                    tag_context = torch.nn.functional.one_hot(torch.tensor([self.tagset[tag] for tag in context_tags]), num_classes=len(self.tagset)).to(torch.float)
+                    tag_context = tag_context.view(-1)  # Flatten the logits
+                    yield (X, tag_context, y)
+                else:
+                    yield (X, None, y)
 
     def __len__(self):
         return self.num_windows
@@ -139,71 +151,102 @@ class LanguageModel:
             return 1 / len(self.vocab)  # Handle case where ngram is not in model
 
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, window_size, embedding_type, embedding_dim):
+    def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
         self.window_size = window_size
         self.embedding_type = embedding_type
+        self.autoregressive_scheme = autoregressive_scheme
+        self.tag_context_size = tag_context_size
         if embedding_type == 'one_hot':
             embedding_dim = len(vocab)
             self.embedding = nn.Embedding.from_pretrained(torch.eye(embedding_dim).to(torch.float), freeze=True)
         else:
             self.embedding = nn.Embedding(len(vocab), embedding_dim)
-        self.linear = nn.Linear(embedding_dim * window_size, len(tagset))
+        self.linear = nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), len(tagset))
 
     def get_embedding(self, char):
         if char not in self.vocab:
             char = '[UNK]'
         return self.embedding(torch.tensor(self.vocab[char]).to(device))
 
-    def forward(self, x):
+    def forward(self, x, extra_logits=None):
         x = self.embedding(x)
         x = x.view(x.size(0), -1)  # Flatten the input
+        if extra_logits is not None:
+            x = torch.cat([x, extra_logits], dim=1)
         return self.linear(x)
 
-    def decode(self, perceptron_scores, pos_lm, beam_size):
+    def decode(self, text, pos_lm, beam_size, device):
+        pad_tag_index = self.tagset['[PAD]']
+        pad_one_hot = torch.nn.functional.one_hot(torch.tensor(pad_tag_index), num_classes=len(self.tagset)).float()
+        previous_predictions = torch.stack([pad_one_hot] * self.tag_context_size)
         if pos_lm is None:
             # Greedy decoding
             tag_ids = []
-            for scores in perceptron_scores:
+            for i in range(len(text)):
+                scores = self.get_scores(text, i, previous_predictions, device)
                 _, predicted_tag = torch.max(scores, dim=1)
                 tag_ids.append(predicted_tag.item())
+                if self.autoregressive_scheme:
+                    if self.autoregressive_scheme == 'teacher_forcing':
+                        one_hot_prediction = torch.nn.functional.one_hot(predicted_tag, num_classes=len(self.tagset)).to(torch.float).to(device)
+                        previous_predictions = self.update_previous_predictions(previous_predictions.to(device), one_hot_prediction)
+                    else:
+                        previous_predictions = self.update_previous_predictions(previous_predictions.to(device), scores)
         else:
             # Viterbi decoding with beam search incorporating pos_lm.score
-            beam = [(0, [])]  # (score, tag_sequence)
-            for scores in perceptron_scores:
-                scores = torch.log_softmax(scores, dim=1).view(-1)
+            beam = [(0, [], previous_predictions)]  # (score, tag_sequence, previous_predictions)
+            for i in range(len(text)):
                 new_beam = []
-                for score, tag_sequence in beam:
+                for score, tag_sequence, prev_preds in beam:
+                    scores = self.get_scores(text, i, prev_preds, device)
+                    scores = torch.log_softmax(scores, dim=1).view(-1)
                     for tag, tag_score in enumerate(scores):
                         new_score = score + tag_score.item()
                         lm_score = pos_lm.score_token(tag_sequence, tag)
                         combined_score = new_score + math.log(lm_score)
-                        new_beam.append((combined_score, tag_sequence + [tag]))
+                        new_tag_sequence = tag_sequence + [tag]
+                        if self.autoregressive_scheme:
+                            if self.autoregressive_scheme == 'teacher_forcing':
+                                one_hot_prediction = torch.nn.functional.one_hot(torch.tensor(tag), num_classes=len(self.tagset)).to(torch.float).to(device)
+                                new_prev_preds = self.update_previous_predictions(prev_preds.to(device), one_hot_prediction)
+                            else:
+                                new_prev_preds = self.update_previous_predictions(prev_preds.to(device), scores)
+                        else:
+                            new_prev_preds = None
+                        new_beam.append((combined_score, new_tag_sequence, new_prev_preds))
                 new_beam.sort(key=lambda x: x[0], reverse=True)
                 beam = new_beam[:beam_size]
             tag_ids = beam[0][1]
         all_tags = list(self.tagset.keys())
         return [all_tags[tag_id] for tag_id in tag_ids]
 
-    
+    def get_scores(self, text, index, previous_predictions, device):
+        start = max(0, index - self.window_size // 2)
+        end = index + self.window_size // 2 + 1
+        window = text[start:end]
+        window = [self.vocab.get(char, self.vocab['[UNK]']) for char in window]
+        if len(window) < self.window_size:
+            pad_left = (self.window_size - len(window)) // 2
+            pad_right = self.window_size - len(window) - pad_left
+            window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
+        X = torch.tensor(window).unsqueeze(0).to(device)
+        if self.autoregressive_scheme:
+            return self(X, extra_logits=previous_predictions.to(device))
+        else:
+            return self(X)
+
+    def update_previous_predictions(self, previous_predictions, new_prediction):
+        if previous_predictions is None:
+            return new_prediction
+        if previous_predictions.size(0) >= self.tag_context_size:
+            previous_predictions = previous_predictions[1:]
+        return torch.cat([previous_predictions, new_prediction], dim=0)
+
     def tag(self, text, device, pos_lm=None, beam_size=None):
-        perceptron_scores = []
-        for i in range(len(text)):
-            start = max(0, i - self.window_size // 2)
-            end = i + self.window_size // 2 + 1
-            window = text[start:end]
-            window = [self.vocab.get(char, self.vocab['[UNK]']) for char in window]
-            if len(window) < self.window_size:
-                pad_left = (self.window_size - len(window)) // 2
-                pad_right = self.window_size - len(window) - pad_left
-                window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
-            X = torch.tensor(window)
-            # Add a batch dimension
-            outputs = self(X.to(device).unsqueeze(0))
-            perceptron_scores.append(outputs)
-        tags = self.decode(perceptron_scores, pos_lm, beam_size)
+        tags = self.decode(text, pos_lm, beam_size, device)
         return [(text[i] if text[i] in self.vocab else '[UNK]', tag) for i, tag in enumerate(tags)]
 
 
@@ -212,11 +255,13 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
-        for X, y in tqdm(train_loader, total=len(train_loader)):
+        for X, extra_logits, y in tqdm(train_loader, total=len(train_loader)):
             X = X.to(device)
+            if extra_logits is not None:
+                extra_logits = extra_logits.to(device)
             y = torch.nn.functional.one_hot(y, num_classes=len(model.tagset)).to(torch.float).to(device)
             optimizer.zero_grad()
-            outputs = model(X)
+            outputs = model(X, extra_logits)
             loss = criterion(outputs.view(-1, outputs.shape[-1]), y.view(-1, y.shape[-1]))
             loss.backward()
             optimizer.step()
@@ -228,10 +273,12 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
         model.eval()
         validation_loss = 0
         with torch.no_grad():
-            for X_val, y_val in validation_loader:
+            for X_val, extra_logits_val, y_val in validation_loader:
                 X_val = X_val.to(device)
+                if extra_logits_val is not None:
+                    extra_logits_val = extra_logits_val.to(device)
                 y_val = torch.nn.functional.one_hot(y_val, num_classes=len(model.tagset)).to(torch.float).to(device)
-                outputs_val = model(X_val)
+                outputs_val = model(X_val, extra_logits_val)
                 loss_val = criterion(outputs_val.view(-1, outputs_val.shape[-1]), y_val.view(-1, y_val.shape[-1]))
                 validation_loss += loss_val.item()
         avg_validation_loss = validation_loss / len(validation_loader)
@@ -285,8 +332,8 @@ def load_cc100(split='train'):
         return dataset
 
 
-def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, embedding_type, embedding_dim, device):
-    model = Tagger(vocab, tagset, window_size, embedding_type, embedding_dim).to(device)
+def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, device):
+    model = Tagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -422,12 +469,14 @@ if __name__ == "__main__":
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
     parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
+    parser.add_argument('--autoregressive_scheme', default=None, choices=['teacher_forcing'])
+    parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"{args.training_dataset}_pos_perceptron_window_{args.window_size}_{args.embedding_type}"
+    model_name = f"{args.training_dataset}_pos_perceptron_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     if args.training_dataset == 'hkcancor':
         training_dataset = load_hkcancor()
@@ -440,13 +489,13 @@ if __name__ == "__main__":
     validation_dataset = training_dataset[:100]
     train_dataset = training_dataset[100:]
 
-    train_data = TaggerDataset(train_dataset, args.window_size, args.vocab_threshold)
+    train_data = TaggerDataset(train_dataset, args.window_size, args.tag_context_size, args.vocab_threshold)
     train_loader = DataLoader(train_data, batch_size=args.batch_size)
 
     print('Training dataset vocab size:', len(train_data.vocab))
     print('Training dataset tagset size:', len(train_data.tagset))
 
-    validation_data = TaggerDataset(validation_dataset, args.window_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset)
+    validation_data = TaggerDataset(validation_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset)
     validation_loader = DataLoader(validation_data, batch_size=args.batch_size)
 
     pos_lm = None
@@ -454,7 +503,7 @@ if __name__ == "__main__":
         pos_lm = LanguageModel([item[1] for item in train_dataset], train_data.tagset, 2)
 
     if args.mode == 'train':
-        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.embedding_type, args.embedding_dim, device)
+        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim, args.autoregressive_scheme, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
         test(model_name, 'ud_yue', pos_lm=pos_lm, beam_size=args.beam_size, device=device)
