@@ -487,7 +487,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"{args.training_dataset}_pos_perceptron{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{args.training_dataset}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     if args.training_dataset == 'hkcancor':
         training_dataset = load_hkcancor()
