@@ -14,7 +14,7 @@ base_url = "https://api.deepseek.com"
 with open('deepseek_api_key.txt', 'r') as file:
     api_key = file.read().strip()
 model_id = 'deepseek-chat'
-max_workers = 1
+max_workers = 500
 
 client = OpenAI(api_key=api_key, base_url=base_url)
 
@@ -45,7 +45,7 @@ class Sim:
 
 def segment_words(prompt_prefix, input_sentence, in_context_samples):
     if len(in_context_samples) == 10:
-        samples = generate_in_context_prompt(in_context_samples)
+        samples = generate_in_context_prompt(list(in_context_samples.values()))
     else:
         # Convert input_sentence to Sim
         input_simhash = Sim(input_sentence)
@@ -253,7 +253,7 @@ if __name__ == "__main__":
     else:
         in_context_utterances = load_hkcancor(min_tokens=5, max_tokens=20)
         random.seed(42)
-        utterances = random.sample(in_context_utterances, 10)
+        in_context_utterances = random.sample(in_context_utterances, 10)
     
     # Compute Sim for utterances and store as hkcancor_hash_table
     in_context_samples = {}
@@ -271,7 +271,7 @@ if __name__ == "__main__":
     elif args.dataset == 'lihkg':
         test_samples = load_dataset("raptorkwok/cantonese_sentences")['train']
         test_samples.shuffle(seed=42)
-        test_samples = [sample['content'] for sample in test_samples if len(sample['content']) <= 100]
+        test_samples = [sample['content'] for sample in test_samples if len(sample['content']) <= 100][:200000]
 
     # Create the output directory if it doesn't exist
     output_dir = f'{args.dataset}_outputs_v{args.prompt_version}'
