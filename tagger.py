@@ -6,6 +6,7 @@ from datasets import load_dataset
 import random
 from tqdm import tqdm
 import math
+import wandb
 
 
 class TaggerDataset(IterableDataset):
@@ -268,8 +269,12 @@ class Tagger(nn.Module):
         return [(text[i] if text[i] in self.vocab else '[UNK]', tag) for i, tag in enumerate(tags)]
 
 
-def train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device):
+def train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device, training_log_steps=10, validation_steps=1000):
     best_loss = float('inf')
+    step = 0
+
+    wandb.init(project="cantag", name=model_name)
+
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
@@ -284,28 +289,36 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-        avg_loss = total_loss / len(train_loader)
-        print(f"Epoch {epoch + 1}/{num_epochs}, Training Loss: {avg_loss}")
-
-        # Calculate validation loss
-        model.eval()
-        validation_loss = 0
-        with torch.no_grad():
-            for X_val, extra_logits_val, y_val in validation_loader:
-                X_val = X_val.to(device)
-                if extra_logits_val is not None:
-                    extra_logits_val = extra_logits_val.to(device)
-                y_val = torch.nn.functional.one_hot(y_val, num_classes=len(model.tagset)).to(torch.float).to(device)
-                outputs_val = model(X_val, extra_logits_val)
-                loss_val = criterion(outputs_val.view(-1, outputs_val.shape[-1]), y_val.view(-1, y_val.shape[-1]))
-                validation_loss += loss_val.item()
-        avg_validation_loss = validation_loss / len(validation_loader)
-        print(f"Epoch {epoch + 1}/{num_epochs}, Validation Loss: {avg_validation_loss}")
-
-        # Save the best model based on validation loss
-        if avg_validation_loss < best_loss:
-            best_loss = avg_validation_loss
-            torch.save(model, f"{model_name}.pth")
+            
+            step += 1
+            if step % training_log_steps == 0:
+                avg_loss = total_loss / training_log_steps
+                wandb.log({"train_loss": avg_loss}, step=step)
+                total_loss = 0
+                
+            if step % validation_steps == 0:
+                model.eval()
+                validation_loss = 0
+                with torch.no_grad():
+                    for X_val, extra_logits_val, y_val in validation_loader:
+                        X_val = X_val.to(device)
+                        if extra_logits_val is not None:
+                            extra_logits_val = extra_logits_val.to(device)
+                        y_val = torch.nn.functional.one_hot(y_val, num_classes=len(model.tagset)).to(torch.float).to(device)
+                        outputs_val = model(X_val, extra_logits_val)
+                        loss_val = criterion(outputs_val.view(-1, outputs_val.shape[-1]), y_val.view(-1, y_val.shape[-1]))
+                        validation_loss += loss_val.item()
+                avg_validation_loss = validation_loss / len(validation_loader)
+                wandb.log({"validation_loss": avg_validation_loss}, step=step)
+                print(f"Step {step}, Validation Loss: {avg_validation_loss}")
+                
+                if avg_validation_loss < best_loss:
+                    best_loss = avg_validation_loss
+                    torch.save(model, f"{model_name}.pth")
+                
+                model.train()
+        
+        print(f"Epoch {epoch + 1}/{num_epochs} completed")
 
 
 def load_helper(dataset):
