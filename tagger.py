@@ -352,6 +352,9 @@ def load_tagged_dataset(dataset_name, split='train'):
 
 def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth, device):
     model = Tagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth).to(device)
+    
+    torch.save(model, f"{model_name}.pth")
+
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -488,7 +491,7 @@ if __name__ == "__main__":
     parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], required=True, help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
-    parser.add_argument('--training_dataset', choices=['hkcancor', 'cc1000', 'lihkg'], required=True, help='Training dataset to use')
+    parser.add_argument('--training_dataset', choices=['hkcancor', 'cc100', 'lihkg'], required=True, help='Training dataset to use')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
     parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
@@ -501,7 +504,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{args.training_dataset}{f'_seg' if args.segmentation_only else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{args.training_dataset}{f'_seg' if args.segmentation_only else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     if args.training_dataset == 'hkcancor':
         training_dataset = load_hkcancor()
