@@ -44,27 +44,25 @@ class Sim:
 
 
 def segment_words(prompt_prefix, input_sentence, in_context_samples):
-    # Convert input_sentence to Sim
-    input_simhash = Sim(input_sentence)
-    
-    # Calculate Sim distances for all in_context_samples
-    distances = [(sample, input_simhash.distance(sample)) for sample in in_context_samples]
-    # Sample top 10 with randomness, where the weight is the inverse of the distance
-    import math
-    weights = [math.exp(-distance) for _, distance in distances]  # Exponential sampling
-    random.seed(42)
-    top_10_samples = random.choices(distances, weights=weights, k=min(10, len(distances)))
+    if len(in_context_samples) == 10:
+        samples = generate_in_context_prompt(in_context_samples)
+    else:
+        # Convert input_sentence to Sim
+        input_simhash = Sim(input_sentence)
+        
+        # Calculate Sim distances for all in_context_samples
+        distances = [(sample, input_simhash.distance(sample)) for sample in in_context_samples]
+        # Sample top 10 with randomness, where the weight is the inverse of the distance
+        import math
+        weights = [math.exp(-distance) for _, distance in distances]  # Exponential sampling
+        random.seed(42)
+        top_10_samples = random.choices(distances, weights=weights, k=min(10, len(distances)))
 
-    print(f"Input sentence: {input_sentence}")
-    for sample, distance in top_10_samples:
-        print(f"Sample: {''.join(word for word, pos in in_context_samples[sample])}, Distance: {distance}")
-    exit(0)
-    
-    # Extract just the samples from the (sample, distance) tuples
-    closest_samples = [in_context_samples[sample] for sample, _ in top_10_samples]
-    
-    # Generate in-context prompt using the closest samples
-    samples = generate_in_context_prompt(closest_samples)
+        # Extract just the samples from the (sample, distance) tuples
+        closest_samples = [in_context_samples[sample] for sample, _ in top_10_samples]
+        
+        # Generate in-context prompt using the closest samples
+        samples = generate_in_context_prompt(closest_samples)
 
     attempts = 0
     while True:
