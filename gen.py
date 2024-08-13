@@ -7,19 +7,65 @@ from tqdm import tqdm
 from openai import OpenAI
 import os
 import argparse
+import re
 from datasets import load_dataset
 
 base_url = "https://api.deepseek.com"
 with open('deepseek_api_key.txt', 'r') as file:
     api_key = file.read().strip()
 model_id = 'deepseek-chat'
-max_workers = 50
+max_workers = 1
 
 client = OpenAI(api_key=api_key, base_url=base_url)
 
 valid_pos_tags = {"ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X"}
 
-def segment_words(pos_prompt, input_sentence):
+
+class Sim:
+    def __init__(self, text=''):
+        self.unigrams = set(text)
+        self.bigrams = set(self.get_bigrams(text))
+    
+    def get_bigrams(self, text):
+        return [text[i:i+2] for i in range(len(text)-1)]
+    
+    def distance(self, other):
+        unigram_distance = self.compare_sets(self.unigrams, other.unigrams)
+        bigram_distance = self.compare_sets(self.bigrams, other.bigrams)
+        return (unigram_distance + bigram_distance) / 2
+    
+    def compare_sets(self, set1, set2):
+        union = set1 | set2
+        intersection = set1 & set2
+        return 1 - (len(intersection) / len(union)) if union else 0
+    
+    def similarity(self, other):
+        return 1 - self.distance(other)
+
+
+def segment_words(prompt_prefix, input_sentence, in_context_samples):
+    # Convert input_sentence to Sim
+    input_simhash = Sim(input_sentence)
+    
+    # Calculate Sim distances for all in_context_samples
+    distances = [(sample, input_simhash.distance(sample)) for sample in in_context_samples]
+    # Sample top 10 with randomness, where the weight is the inverse of the distance
+    import math
+    weights = [math.exp(-distance) for _, distance in distances]  # Exponential sampling
+    random.seed(42)
+    top_10_samples = random.choices(distances, weights=weights, k=min(10, len(distances)))
+
+    print(f"Input sentence: {input_sentence}")
+    for sample, distance in top_10_samples:
+        print(f"Sample: {''.join(word for word, pos in in_context_samples[sample])}, Distance: {distance}")
+    exit(0)
+    
+    # Extract just the samples from the (sample, distance) tuples
+    closest_samples = [in_context_samples[sample] for sample, _ in top_10_samples]
+    
+    # Generate in-context prompt using the closest samples
+    samples = generate_in_context_prompt(closest_samples)
+
     attempts = 0
     while True:
         result = None
@@ -28,7 +74,7 @@ def segment_words(pos_prompt, input_sentence):
                 model=model_id,
                 messages=[{
                             "role": "system",
-                            "content": pos_prompt
+                            "content": f'{prompt_prefix}\n\n{samples}'
                           },
                           {
                             "role": "user",
@@ -76,39 +122,150 @@ def load_hkcancor(min_tokens, max_tokens):
     return utterances
 
 
-def generate_prompt(prompt_version, segmentation_given):
-    with open(f'prompt_v{prompt_version}.txt', 'r') as file:
-        prompt_prefix = file.read()
+def cut_sent(para):
+    """
+    Cut a paragraph into sentences.
 
-    utterances = load_hkcancor(min_tokens=5, max_tokens=20)
+    This function splits a given paragraph into sentences based on various punctuation marks
+    and formatting rules specific to Chinese and English text.
 
-    random.seed(42)
-    utterances = random.sample(utterances, 10)
+    Args:
+        para (str): The input paragraph to be segmented.
 
+    Returns:
+        list: A list of segmented sentences.
+
+    Examples:
+        >>> cut_sent("你好！我是小明。你呢？")
+        ['你好！', '我是小明。', '你呢？']
+
+        >>> cut_sent("他說：「今天天氣真好。」我同意。")
+        ['他說：「今天天氣真好。」', '我同意。']
+
+        >>> cut_sent("他說：“今天天氣真好。”我同意。")
+        ['他說：“今天天氣真好。”', '我同意。']
+
+        >>> cut_sent("這是一個句子...還有一個。")
+        ['這是一個句子...', '還有一個。']
+
+        >>> cut_sent("第一句。第二句！第三句？")
+        ['第一句。', '第二句！', '第三句？']
+
+        >>> cut_sent("這是…一個...長句子。")
+        ['這是…', '一個...', '長句子。']
+
+        >>> cut_sent("你好")
+        ['你好']
+    """
+    para = re.sub(r'([。！!？?])([^”’」』])', r"\1\n\2", para)  # 单字符断句符
+    para = re.sub(r'(\.{2,})([^”’」』])', r"\1\n\2", para)  # 英文省略号
+    para = re.sub(r'(…{1,})([^”’」』])', r"\1\n\2", para)  # 中文省略号
+    para = re.sub(r'([.。！!？?][”’」』])([^，,。.！!？?])', r'\1\n\2', para)
+    # 如果双引号前有终止符，那么双引号才是句子的终点，把分句符\n放到双引号后，注意前面的几句都小心保留了双引号
+    para = para.rstrip()  # 段尾如果有多余的\n就去掉它
+    # 很多规则中会考虑分号;，但是这里我把它忽略不计，破折号、英文双引号等同样忽略，需要的再做些简单调整即可。
+    return para.split("\n")
+
+
+def cut_utterance(utterance):
+    """
+    Cut an utterance into sentences and align the POS tags.
+
+    Args:
+        utterance (list): A list of (token, pos) tuples.
+
+    Returns:
+        list: A list of segmented utterances, where each utterance is a list of (token, pos) tuples.
+
+    Example:
+        >>> utterance = [('你好', 'INTJ'), ('！', 'PUNCT'), ('我', 'PRON'), ('是', 'AUX'), ('小明', 'PROPN'), ('。', 'PUNCT'), ('你', 'PRON'), ('呢', 'PART'), ('？', 'PUNCT')]
+        >>> cut_utterance(utterance)
+        [[('你好', 'INTJ'), ('！', 'PUNCT')], [('我', 'PRON'), ('是', 'AUX'), ('小明', 'PROPN'), ('。', 'PUNCT')], [('你', 'PRON'), ('呢', 'PART'), ('？', 'PUNCT')]]
+
+        >>> utterance = [('你好', 'INTJ')]
+        >>> cut_utterance(utterance)
+        [[('你好', 'INTJ')]]
+
+        >>> utterance = [('...', 'PUNCT')]
+        >>> cut_utterance(utterance)
+        [[('...', 'PUNCT')]]
+    """
+    # Get all tokens from the utterance
+    tokens = ''.join([token for token, _ in utterance])
+
+    # Cut the tokens into sentences
+    sentences = cut_sent(tokens)
+
+    # Align the sentences back to the utterance
+    segmented_utterances = []
+    start_index = 0
+    for sentence in sentences:
+        end_index = start_index
+        current_sentence = []
+        while end_index < len(utterance):
+            token, pos = utterance[end_index]
+            current_sentence.append((token, pos))
+            end_index += 1
+            if ''.join(token for token, _ in current_sentence) == sentence:
+                break
+        
+        if end_index == len(utterance) and len(sentences) == 1:
+            # If there's only one sentence and we've reached the end, include all tokens
+            segmented_utterances.append(utterance[start_index:])
+        else:
+            # Ensure the last token is a punctuation mark
+            if pos != 'PUNCT':
+                end_index -= 1
+                current_sentence.pop()
+            segmented_utterances.append(current_sentence)
+        
+        start_index = end_index
+
+    segmented_utterances = [utterance for utterance in segmented_utterances if utterance]
+
+    return segmented_utterances
+
+
+def generate_in_context_prompt(utterances):
     in_context_samples = utterances
     
     # Format in-context samples for the prompt
     in_context_prompt = "\n\n".join([
-        f'EXAMPLE INPUT SENTENCE:\n{(" " if segmentation_given else "").join([word for word, pos in sample])}\n\nEXAMPLE JSON OUTPUT:\n{json.dumps({"pos_tagged_words": [[word, pos] for word, pos in sample]}, ensure_ascii=False)}'
+        f'EXAMPLE INPUT SENTENCE:\n{"".join([word for word, pos in sample])}\n\nEXAMPLE JSON OUTPUT:\n{json.dumps({"pos_tagged_words": [[word, pos] for word, pos in sample]}, ensure_ascii=False)}'
         for sample in in_context_samples
     ])
 
-    # Update the word segmentation prompt with in-context samples
-    pos_prompt = f"{prompt_prefix}\n\n{in_context_prompt}"
-    
-    return pos_prompt
+    return in_context_prompt
 
 
 if __name__ == "__main__":
-    prompt_version = 2
-
-    pos_prompt = generate_prompt(prompt_version=prompt_version, segmentation_given=False)
-
-    print(pos_prompt)
-
     args = argparse.ArgumentParser()
     args.add_argument('--dataset', type=str, choices=['cc100', 'lihkg'], required=True)
+    args.add_argument('--prompt_version', type=int, default=2, required=True)
+    args.add_argument('--selective_in_context', action='store_true')
     args = args.parse_args()
+
+    with open(f'prompt_v{args.prompt_version}.txt', 'r') as file:
+        prompt_prefix = file.read()
+
+    if args.selective_in_context:
+        in_context_utterances = load_hkcancor(min_tokens=0, max_tokens=99999)
+        in_context_utterances = [segment for utterance in in_context_utterances for segment in cut_utterance(utterance)]
+        in_context_utterances = [utterance for utterance in in_context_utterances if len(utterance) >= 5 and len(utterance) <= 40]
+    else:
+        in_context_utterances = load_hkcancor(min_tokens=5, max_tokens=20)
+        random.seed(42)
+        utterances = random.sample(in_context_utterances, 10)
+    
+    # Compute Sim for utterances and store as hkcancor_hash_table
+    in_context_samples = {}
+    for utterance in in_context_utterances:
+        # Convert the utterance to a string representation
+        utterance_str = ''.join([word for word, pos in utterance])
+        # Compute Sim for the utterance
+        hash_value = Sim(utterance_str)
+        # Store the hash value with the utterance as the key
+        in_context_samples[hash_value] = utterance
 
     if args.dataset == 'cc100':
         test_samples = load_dataset("indiejoseph/cc100-yue")['train']
@@ -119,7 +276,7 @@ if __name__ == "__main__":
         test_samples = [sample['content'] for sample in test_samples if len(sample['content']) <= 100]
 
     # Create the output directory if it doesn't exist
-    output_dir = f'{args.dataset}_outputs_v{prompt_version}'
+    output_dir = f'{args.dataset}_outputs_v{args.prompt_version}'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
@@ -149,7 +306,7 @@ if __name__ == "__main__":
     with open(pos_results_path, 'a+', encoding='utf-8') as file, open(pos_errors_path, 'a+', encoding='utf-8') as error_file:
         lock = Lock()
         def process_sample(input_sentence):
-            pos_result = segment_words(pos_prompt, input_sentence.replace(" ", ""))
+            pos_result = segment_words(prompt_prefix, input_sentence.replace(" ", ""), in_context_samples)
             if 'error' in pos_result:
                 print(f"POS tagging failed for sentence: {input_sentence}")
                 print(f"Error: {pos_result['error']}")
