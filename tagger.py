@@ -186,38 +186,17 @@ class Tagger(nn.Module):
                 raise ValueError(f"Invalid network depth: {network_depth}")
         elif network_type == 'cnn':
             full_embedding_dim = embedding_dim + (len(self.tagset) if self.autoregressive_scheme else 0)
-            class ResidualBlock(nn.Module):
-                def __init__(self, channels):
-                    super(ResidualBlock, self).__init__()
-                    self.conv1 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
-                    self.bn1 = nn.BatchNorm1d(channels)
-                    self.relu = nn.ReLU(inplace=True)
-                    self.conv2 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
-                    self.bn2 = nn.BatchNorm1d(channels)
 
-                def forward(self, x):
-                    residual = x
-                    out = self.conv1(x)
-                    out = self.bn1(out)
-                    out = self.relu(out)
-                    out = self.conv2(out)
-                    out = self.bn2(out)
-                    out += residual
-                    out = self.relu(out)
-                    return out
-
-            layers = [nn.Conv1d(full_embedding_dim, full_embedding_dim, kernel_size=3, padding=1),
-                      nn.BatchNorm1d(full_embedding_dim),
-                      nn.ReLU(inplace=True)]
-            
-            for _ in range(network_depth - 1):
-                layers.append(ResidualBlock(full_embedding_dim))
-            
-            layers.extend([
-                nn.AdaptiveAvgPool1d(1),
-                nn.Flatten(),
-                nn.Linear(full_embedding_dim, len(tagset))
-            ])
+            if network_depth == 2:
+                layers = [
+                    nn.Conv1d(full_embedding_dim, full_embedding_dim * 2, kernel_size=2, stride=1),
+                    nn.ReLU(),
+                    nn.Conv1d(full_embedding_dim * 2, full_embedding_dim * 4, kernel_size=2, stride=1),
+                    nn.ReLU(),
+                    nn.AdaptiveMaxPool1d(1),
+                    nn.Flatten(),
+                    nn.Linear(full_embedding_dim * 4, len(tagset))
+                ]
 
             self.cnn = nn.Sequential(*layers)
         else:
@@ -378,7 +357,7 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
                 
                 if avg_validation_loss < best_loss:
                     best_loss = avg_validation_loss
-                    torch.save(model, f"{model_name}.pth")
+                    torch.save(model, f"models/{model_name}.pth")
                 
                 model.train()
         
@@ -408,11 +387,6 @@ def load_helper(dataset):
 
 def load_hkcancor():
     dataset = load_dataset('nanyang-technological-university-singapore/hkcancor', split='train')
-    # Map all "V" in pos_tags_ud to "VERB"
-    for item in dataset:
-        item['pos_tags_ud'] = [tag if tag != dataset.features["pos_tags_ud"].feature.str2int("V") 
-                               else dataset.features["pos_tags_ud"].feature.str2int("VERB") 
-                               for tag in item['pos_tags_ud']]
     return load_helper(dataset)
 
 
