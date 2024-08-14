@@ -150,9 +150,9 @@ class LanguageModel:
         else:
             return 1 / len(self.vocab)  # Handle case where ngram is not in model
 
-class Tagger(nn.Module):
+class SlidingTagger(nn.Module):
     def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth):
-        super(Tagger, self).__init__()
+        super(SlidingTagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
         self.window_size = window_size
@@ -408,7 +408,7 @@ def load_tagged_dataset(dataset_name, split='train'):
 
 def train(model_name, train_loader, validation_loader, vocab, tagset, window_size,
           tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, device):
-    model = Tagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
+    model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
     
     torch.save(model, f"models/{model_name}.pth")
 
