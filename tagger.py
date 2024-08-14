@@ -84,7 +84,6 @@ class TaggerDataset(IterableDataset):
                         pad_size = self.tag_context_size - len(context_tags)
                         context_tags = ['[PAD]'] * pad_size + context_tags
                     tag_context = torch.nn.functional.one_hot(torch.tensor([self.tagset[tag] for tag in context_tags]), num_classes=len(self.tagset)).to(torch.float)
-                    tag_context = tag_context.view(-1)  # Flatten the logits
                     yield (X, tag_context, y)
                 else:
                     yield (X, None, y)
@@ -152,7 +151,7 @@ class LanguageModel:
             return 1 / len(self.vocab)  # Handle case where ngram is not in model
 
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth):
+    def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
@@ -165,24 +164,64 @@ class Tagger(nn.Module):
             self.embedding = nn.Embedding.from_pretrained(torch.eye(embedding_dim).to(torch.float), freeze=True)
         else:
             self.embedding = nn.Embedding(len(vocab), embedding_dim)
-        if network_depth == 3:
-            self.linear = nn.Sequential(
-                nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), embedding_dim),
-                nn.ReLU(),
-                nn.Linear(embedding_dim, embedding_dim),
-                nn.ReLU(),
-                nn.Linear(embedding_dim, len(tagset))
-            )
-        elif network_depth == 2:
-            self.linear = nn.Sequential(
-                nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), embedding_dim),
-                nn.ReLU(),
-                nn.Linear(embedding_dim, len(tagset))
-            )
-        elif network_depth == 1:
-            self.linear = nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), len(tagset))
+        self.network_type = network_type
+        if network_type == 'mlp':
+            if network_depth == 3:
+                self.linear = nn.Sequential(
+                    nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), embedding_dim),
+                    nn.ReLU(),
+                    nn.Linear(embedding_dim, embedding_dim),
+                    nn.ReLU(),
+                    nn.Linear(embedding_dim, len(tagset))
+                )
+            elif network_depth == 2:
+                self.linear = nn.Sequential(
+                    nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), embedding_dim),
+                    nn.ReLU(),
+                    nn.Linear(embedding_dim, len(tagset))
+                )
+            elif network_depth == 1:
+                self.linear = nn.Linear(embedding_dim * window_size + (tag_context_size * len(self.tagset) if self.autoregressive_scheme else 0), len(tagset))
+            else:
+                raise ValueError(f"Invalid network depth: {network_depth}")
+        elif network_type == 'cnn':
+            full_embedding_dim = embedding_dim + (len(self.tagset) if self.autoregressive_scheme else 0)
+            class ResidualBlock(nn.Module):
+                def __init__(self, channels):
+                    super(ResidualBlock, self).__init__()
+                    self.conv1 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
+                    self.bn1 = nn.BatchNorm1d(channels)
+                    self.relu = nn.ReLU(inplace=True)
+                    self.conv2 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
+                    self.bn2 = nn.BatchNorm1d(channels)
+
+                def forward(self, x):
+                    residual = x
+                    out = self.conv1(x)
+                    out = self.bn1(out)
+                    out = self.relu(out)
+                    out = self.conv2(out)
+                    out = self.bn2(out)
+                    out += residual
+                    out = self.relu(out)
+                    return out
+
+            layers = [nn.Conv1d(full_embedding_dim, full_embedding_dim, kernel_size=3, padding=1),
+                      nn.BatchNorm1d(full_embedding_dim),
+                      nn.ReLU(inplace=True)]
+            
+            for _ in range(network_depth - 1):
+                layers.append(ResidualBlock(full_embedding_dim))
+            
+            layers.extend([
+                nn.AdaptiveAvgPool1d(1),
+                nn.Flatten(),
+                nn.Linear(full_embedding_dim, len(tagset))
+            ])
+
+            self.cnn = nn.Sequential(*layers)
         else:
-            raise ValueError(f"Invalid network depth: {network_depth}")
+            raise ValueError(f"Invalid network type: {network_type}")
 
     def get_embedding(self, char):
         if char not in self.vocab:
@@ -191,10 +230,33 @@ class Tagger(nn.Module):
 
     def forward(self, x, extra_logits=None):
         x = self.embedding(x)
-        x = x.view(x.size(0), -1)  # Flatten the input
-        if extra_logits is not None:
-            x = torch.cat([x, extra_logits], dim=1)
-        return self.linear(x)
+        if self.network_type == 'mlp':
+            x = x.view(x.size(0), -1)  # Flatten the input
+            if extra_logits is not None:
+                extra_logits = extra_logits.view(extra_logits.size(0), -1)
+                x = torch.cat([x, extra_logits], dim=1)
+            return self.linear(x)
+        elif self.network_type == 'cnn':
+            if extra_logits is not None:
+                batch_size_x, seq_len, embed_dim = x.shape
+                batch_size_extra, extra_len, extra_dim = extra_logits.shape
+
+                assert(batch_size_x == batch_size_extra)
+                assert(extra_len <= seq_len)
+                
+                # Pad extra_logits to match the sequence length of x
+                padded_extra_logits = torch.nn.functional.pad(extra_logits, (0, 0, 0, seq_len - extra_len))
+                
+                # Concatenate x and padded_extra_logits along the last dimension
+                x = torch.cat([x, padded_extra_logits], dim=-1)
+
+                assert(x.shape == (batch_size_x, seq_len, embed_dim + extra_dim))
+                
+                x = x.transpose(1, 2)
+
+                assert(x.shape == (batch_size_x, embed_dim + extra_dim, seq_len))
+            return self.cnn(x)
+
 
     def decode(self, text, pos_lm, beam_size, device):
         pad_tag_index = self.tagset['[PAD]']
@@ -251,9 +313,11 @@ class Tagger(nn.Module):
             pad_left = (self.window_size - len(window)) // 2
             pad_right = self.window_size - len(window) - pad_left
             window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
+        # Add batch dimension
         X = torch.tensor(window).unsqueeze(0).to(device)
+        previous_predictions = previous_predictions.unsqueeze(0).to(device)
         if self.autoregressive_scheme:
-            return self(X, extra_logits=previous_predictions.view(1, -1).to(device))
+            return self(X, extra_logits=previous_predictions)
         else:
             return self(X)
 
@@ -344,6 +408,11 @@ def load_helper(dataset):
 
 def load_hkcancor():
     dataset = load_dataset('nanyang-technological-university-singapore/hkcancor', split='train')
+    # Map all "V" in pos_tags_ud to "VERB"
+    for item in dataset:
+        item['pos_tags_ud'] = [tag if tag != dataset.features["pos_tags_ud"].feature.str2int("V") 
+                               else dataset.features["pos_tags_ud"].feature.str2int("VERB") 
+                               for tag in item['pos_tags_ud']]
     return load_helper(dataset)
 
 
@@ -363,10 +432,11 @@ def load_tagged_dataset(dataset_name, split='train'):
         return dataset
 
 
-def train(model_name, train_loader, validation_loader, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth, device):
-    model = Tagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_depth).to(device)
+def train(model_name, train_loader, validation_loader, vocab, tagset, window_size,
+          tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, device):
+    model = Tagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
     
-    torch.save(model, f"{model_name}.pth")
+    torch.save(model, f"models/{model_name}.pth")
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -465,7 +535,7 @@ def test(model_name, test_dataset, pos_lm, beam_size, segmentation_only, device)
 
     test_dataset = test_dataset[:100]
 
-    model = torch.load(f"{model_name}.pth", weights_only=False)
+    model = torch.load(f"models/{model_name}.pth", weights_only=False)
     model.to(device)
     model.eval()
 
@@ -511,13 +581,14 @@ if __name__ == "__main__":
     parser.add_argument('--autoregressive_scheme', default=None, choices=['teacher_forcing'])
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
+    parser.add_argument('--network_type', choices=['mlp', 'cnn'], default='mlp', help='Type of the tagger neural network')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--segmentation_only', action='store_true', help='Whether to only segment the text')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if args.window_size != 5 else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if args.window_size != 5 else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     training_dataset = []
     for dataset in args.training_dataset:
@@ -551,7 +622,9 @@ if __name__ == "__main__":
         pos_lm = LanguageModel([item[1] for item in train_dataset], train_data.tagset, 2)
 
     if args.mode == 'train':
-        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim, args.autoregressive_scheme, args.network_depth, device)
+        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset,
+              args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim,
+              args.autoregressive_scheme, args.network_type, args.network_depth, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
         test(model_name, 'ud_yue', pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
