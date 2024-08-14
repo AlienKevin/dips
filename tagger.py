@@ -269,7 +269,7 @@ class Tagger(nn.Module):
         return [(text[i] if text[i] in self.vocab else '[UNK]', tag) for i, tag in enumerate(tags)]
 
 
-def train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device, training_log_steps=10, validation_steps=1000):
+def train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
     best_loss = float('inf')
     step = 0
 
@@ -295,8 +295,8 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
                 avg_loss = total_loss / training_log_steps
                 wandb.log({"train_loss": avg_loss}, step=step)
                 total_loss = 0
-                
-            if step % validation_steps == 0:
+            
+            if step % round(validation_steps * len(train_loader)) == 0:
                 model.eval()
                 validation_loss = 0
                 with torch.no_grad():
