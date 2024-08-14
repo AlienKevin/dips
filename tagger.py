@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, IterableDataset
 from datasets import load_dataset
 import random
@@ -10,7 +11,8 @@ import wandb
 
 
 class TaggerDataset(IterableDataset):
-    def __init__(self, data, window_size, tag_context_size, vocab_threshold, vocab=None, tagset=None):
+    def __init__(self, data, window_size, tag_context_size, vocab_threshold, sliding=True, vocab=None, tagset=None):
+        self.sliding = sliding
         self.data = data
         self.window_size = window_size
         self.vocab_threshold = vocab_threshold
@@ -53,7 +55,7 @@ class TaggerDataset(IterableDataset):
         for sentence, tags in self.data:
             for tag in tags:
                 tagset.add(tag)
-        if self.tag_context_size > 0:
+        if self.tag_context_size > 0 or not self.sliding:
             tagset.add('[PAD]')
         tagset = sorted(list(tagset))
         tagset = {tag: idx for idx, tag in enumerate(tagset)}
@@ -89,10 +91,19 @@ class TaggerDataset(IterableDataset):
                     yield (X, None, y)
 
     def __len__(self):
-        return self.num_windows
+        if self.sliding:
+            return self.num_windows
+        else:
+            return len(self.data)
 
     def __iter__(self):
-        return self.prepare_windows()
+        if self.sliding:
+            return self.prepare_windows()
+        else:
+            for sentence, tags in self.data:
+                X = torch.tensor([self.vocab.get(char, self.vocab['[UNK]']) for char in sentence])
+                y = torch.tensor([self.tagset[tag] for tag in tags])
+                yield (X, y)
 
 
 class LanguageModel:
@@ -149,6 +160,40 @@ class LanguageModel:
             return 1 / (len(self.vocab) + sum(self.model[ngram].values()))  # Add-1 smoothing for unseen ngrams
         else:
             return 1 / len(self.vocab)  # Handle case where ngram is not in model
+
+
+class Tagger(nn.Module):
+    def __init__(self, vocab, tagset, embedding_dim):
+        super(Tagger, self).__init__()
+        self.vocab = vocab
+        self.tagset = tagset
+        self.embedding = nn.Embedding(len(vocab), embedding_dim)
+        
+        self.conv1 = nn.Conv1d(embedding_dim, 128, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=1)
+        
+        self.fc = nn.Linear(512, len(tagset))
+        
+    def forward(self, x):
+        # x shape: (batch_size, sequence_length)
+        embedded = self.embedding(x)  # (batch_size, sequence_length, embedding_dim)
+
+        # Transpose for 1D convolution
+        x = embedded.transpose(1, 2)  # (batch_size, embedding_dim, sequence_length)
+        
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        
+        # Transpose back
+        x = x.transpose(1, 2)  # (batch_size, sequence_length, 512)
+        
+        # Apply fully connected layer to each time step
+        x = self.fc(x)  # (batch_size, sequence_length, len(tagset))
+        
+        return x
+
 
 class SlidingTagger(nn.Module):
     def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth):
@@ -321,6 +366,52 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
+        for X, y in tqdm(train_loader, total=len(train_loader)):
+            X = X.to(device)
+            y = y.to(device)
+            optimizer.zero_grad()
+            outputs = model(X)
+            loss = criterion(outputs.view(-1, outputs.shape[-1]), y.view(-1))
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            
+            step += 1
+            if step % training_log_steps == 0:
+                avg_loss = total_loss / training_log_steps
+                wandb.log({"train_loss": avg_loss}, step=step)
+                total_loss = 0
+            
+            if step % round(validation_steps * len(train_loader)) == 0:
+                model.eval()
+                validation_loss = 0
+                with torch.no_grad():
+                    for X_val, y_val in validation_loader:
+                        X_val = X_val.to(device)
+                        y_val = y_val.to(device)
+                        outputs_val = model(X_val)
+                        loss_val = criterion(outputs_val.view(-1, outputs_val.shape[-1]), y_val.view(-1))
+                        validation_loss += loss_val.item()
+                avg_validation_loss = validation_loss / len(validation_loader)
+                wandb.log({"validation_loss": avg_validation_loss}, step=step)
+                print(f"Step {step}, Validation Loss: {avg_validation_loss}")
+                
+                if avg_validation_loss < best_loss:
+                    best_loss = avg_validation_loss
+                    torch.save(model, f"models/{model_name}.pth")
+                
+                model.train()
+
+
+def train_sliding_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
+    best_loss = float('inf')
+    step = 0
+
+    wandb.init(project="cantag", name=model_name)
+
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0
         for X, extra_logits, y in tqdm(train_loader, total=len(train_loader)):
             X = X.to(device)
             if extra_logits is not None:
@@ -406,16 +497,22 @@ def load_tagged_dataset(dataset_name, split='train'):
         return dataset
 
 
-def train(model_name, train_loader, validation_loader, vocab, tagset, window_size,
+def train(model_name, train_loader, validation_loader, vocab, tagset, sliding, window_size,
           tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, device):
-    model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
+    if sliding:
+        model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
+    else:
+        model = Tagger(vocab, tagset, embedding_dim).to(device)
     
     torch.save(model, f"models/{model_name}.pth")
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs=5, device=device)
+    if sliding:
+        train_sliding_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs=5, device=device)
+    else:
+        train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs=5, device=device)
 
 
 def upos_id_to_str(upos_id):
@@ -545,10 +642,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Train or test the POS tagger model.')
     parser.add_argument('--mode', choices=['train', 'test'], required=True, help='Mode to run the script in: train or test')
-    parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], required=True, help='Embedding type to use')
+    parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
     parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg'], required=True, help='Training dataset(s) to use')
+    parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
     parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
@@ -562,7 +660,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if args.window_size != 5 else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}_{args.embedding_type}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if args.window_size != 5 else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     training_dataset = []
     for dataset in args.training_dataset:
@@ -582,14 +680,21 @@ if __name__ == "__main__":
     validation_dataset = training_dataset[:100]
     train_dataset = training_dataset[100:]
 
-    train_data = TaggerDataset(train_dataset, args.window_size, args.tag_context_size, args.vocab_threshold)
-    train_loader = DataLoader(train_data, batch_size=args.batch_size)
+    def collate_fn(batch):
+        X = [item[0] for item in batch]
+        y = [item[1] for item in batch]
+        X_padded = torch.nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=train_data.vocab['[PAD]'])
+        y_padded = torch.nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=train_data.tagset['[PAD]'])
+        return X_padded, y_padded
+
+    train_data = TaggerDataset(train_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, sliding=args.sliding)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else None)
 
     print('Training dataset vocab size:', len(train_data.vocab))
     print('Training dataset tagset size:', len(train_data.tagset))
 
-    validation_data = TaggerDataset(validation_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset)
-    validation_loader = DataLoader(validation_data, batch_size=args.batch_size)
+    validation_data = TaggerDataset(validation_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset, sliding=args.sliding)
+    validation_loader = DataLoader(validation_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else None)
 
     pos_lm = None
     if args.use_pos_lm:
@@ -597,7 +702,7 @@ if __name__ == "__main__":
 
     if args.mode == 'train':
         train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset,
-              args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim,
+              args.sliding, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim,
               args.autoregressive_scheme, args.network_type, args.network_depth, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
