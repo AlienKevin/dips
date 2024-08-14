@@ -194,6 +194,24 @@ class Tagger(nn.Module):
         
         return x
 
+    def tag(self, text, device):
+        # Convert text to tensor of indices
+        indices = torch.tensor([self.vocab.get(char, self.vocab['[UNK]']) for char in text], dtype=torch.long).unsqueeze(0).to(device)
+        
+        # Get model predictions
+        with torch.no_grad():
+            outputs = self(indices)
+        
+        # Get the most likely tag for each character
+        _, predicted_tags = torch.max(outputs, dim=2)
+        
+        # Convert tag indices to tag strings
+        all_tags = list(self.tagset.keys())
+        tags = [all_tags[tag_id] for tag_id in predicted_tags[0]]
+        
+        # Pair each character with its predicted tag
+        return [(char, tag) for char, tag in zip(text, tags)]
+
 
 class SlidingTagger(nn.Module):
     def __init__(self, vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth):
@@ -354,7 +372,7 @@ class SlidingTagger(nn.Module):
 
     def tag(self, text, device, pos_lm=None, beam_size=None):
         tags = self.decode(text, pos_lm, beam_size, device)
-        return [(text[i] if text[i] in self.vocab else '[UNK]', tag) for i, tag in enumerate(tags)]
+        return [(text[i], tag) for i, tag in enumerate(tags)]
 
 
 def train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
@@ -584,7 +602,14 @@ def merge_tokens(tagged_characters):
 
     return merged_tokens
 
-def test(model_name, test_dataset, pos_lm, beam_size, segmentation_only, device):
+
+def fix_hkcancor_tag(tag):
+    if tag == 'V':
+        return 'VERB'
+    return tag
+
+
+def test(model_name, test_dataset, sliding, pos_lm, beam_size, segmentation_only, device):
     from spacy.training import Example
     from spacy.scorer import Scorer
     from spacy.tokens import Doc
@@ -614,10 +639,13 @@ def test(model_name, test_dataset, pos_lm, beam_size, segmentation_only, device)
     examples = []
     errors = []
     for reference in tqdm(test_dataset):
-        hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device, pos_lm, beam_size))
-        reference_tokens = [''.join(char if char in model.vocab.keys() else '[UNK]' for char in token) for token, _ in reference]
-        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[tag for _, tag in reference])
-        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[tag for _, tag in hypothesis])
+        if sliding:
+            hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device, pos_lm, beam_size))
+        else:
+            hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device))
+        reference_tokens = [token for token, _ in reference]
+        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[fix_hkcancor_tag(tag) for _, tag in reference])
+        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[fix_hkcancor_tag(tag) for _, tag in hypothesis])
         example = Example(predicted_doc, target)
         examples.append(example)
 
@@ -706,6 +734,6 @@ if __name__ == "__main__":
               args.autoregressive_scheme, args.network_type, args.network_depth, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
-        test(model_name, 'ud_yue', pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model_name, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
-        test(model_name, 'cc100', pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model_name, 'cc100', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)

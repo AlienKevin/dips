@@ -303,3 +303,88 @@ POS Tagging Accuracy: 0.8021358647285672
 Token F1 Score: 0.8114870628376457
 Token Precision: 0.7974294495669181
 Token Recall: 0.8260492040520984
+
+
+pos_tagger_hkcancor_embedding_dim_40_window_5.pth
+
+ud_yue
+
+POS Tagging Accuracy: 0.741001564945227
+Token F1 Score: 0.8481397114654518
+Token Precision: 0.8430188679245283
+Token Recall: 0.8533231474407945
+
+cc100
+
+POS Tagging Accuracy: 0.6325552635646932
+Token F1 Score: 0.6563662374821172
+Token Precision: 0.6489391796322489
+Token Recall: 0.6639652677279305
+
+
+pos_tagger_cc100_embedding_dim_40_window_5.pth
+
+ud_yue
+
+POS Tagging Accuracy: 0.8089976322020521
+Token F1 Score: 0.8877786318216755
+Token Precision: 0.8932714617169374
+Token Recall: 0.8823529411764706
+
+cc100
+
+POS Tagging Accuracy: 0.8706960248263632
+Token F1 Score: 0.9071687183200579
+Token Precision: 0.9078260869565218
+Token Recall: 0.9065123010130246
+
+
+pos_tagger_cc100_lihkg_embedding_dim_40_window_5
+
+ud_yue
+
+POS Tagging Accuracy: 0.8140900195694716
+Token F1 Score: 0.9103448275862068
+Token Precision: 0.9131437355880092
+Token Recall: 0.907563025210084
+
+cc100
+
+POS Tagging Accuracy: 0.879396984924623
+Token F1 Score: 0.9079061685490877
+Token Precision: 0.9084323384526224
+Token Recall: 0.9073806078147613
+
+
+pos_tagger_cc100_embedding_dim_40_window_5.pth
+
+ud_yue
+
+POS Tagging Accuracy: 0.8163908589440505
+Token F1 Score: 0.9083910700538878
+Token Precision: 0.9154383242823895
+Token Recall: 0.9014514896867838
+
+cc100
+
+POS Tagging Accuracy: 0.8796447076239822
+Token F1 Score: 0.9107531562908141
+Token Precision: 0.9132712456344587
+Token Recall: 0.9082489146164978
+
+
+pos_tagger_lihkg_embedding_dim_40_window_5
+
+ud_yue
+
+POS Tagging Accuracy: 0.804245283018868
+Token F1 Score: 0.8886346300533944
+Token Precision: 0.8872810357958872
+Token Recall: 0.8899923605805958
+
+cc100
+
+POS Tagging Accuracy: 0.8342525399129174
+Token F1 Score: 0.8369384359401
+Token Precision: 0.8033005057226511
+Token Recall: 0.8735166425470333
