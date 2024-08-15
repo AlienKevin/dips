@@ -8,7 +8,7 @@ import random
 from tqdm import tqdm
 import math
 import wandb
-from torchcrf import CRF
+from crf import CRF
 
 
 class TaggerDataset(IterableDataset):
@@ -200,7 +200,7 @@ class Tagger(nn.Module):
         if self.use_crf:
             if tags is not None:
                 # Training mode
-                return -self.crf(emissions, tags)  # Negative log-likelihood
+                return -self.crf(emissions, tags, reduction="token_mean")  # Negative log-likelihood
             else:
                 # Inference mode
                 return self.crf.decode(emissions)
