@@ -1,5 +1,6 @@
 bert_base_cantonese_pos_hkcancor/
 electra_hongkongese_small_pos_hkcancor/
+electra_hongkongese_small_pos_wiki_lihkg_cc100/
 wandb/
 .DS_Store
 deepseek_api_key.txt
