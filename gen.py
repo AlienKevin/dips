@@ -238,7 +238,7 @@ def generate_in_context_prompt(utterances):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument('--dataset', type=str, choices=['cc100', 'lihkg', 'wiki_yue_long'], required=True)
+    args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long'], required=True)
     args.add_argument('--prompt_version', type=int, default=2, required=True)
     args.add_argument('--selective_in_context', action='store_true')
     args = args.parse_args()
@@ -265,7 +265,7 @@ if __name__ == "__main__":
         # Store the hash value with the utterance as the key
         in_context_samples[hash_value] = utterance
 
-    if args.dataset == 'cc100':
+    if args.dataset == 'cc100_yue':
         test_samples = load_dataset("indiejoseph/cc100-yue")['train']
         test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 100]
     elif args.dataset == 'lihkg':
