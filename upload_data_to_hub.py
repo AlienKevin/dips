@@ -5,7 +5,7 @@ import argparse
 
 
 args = argparse.ArgumentParser()
-args.add_argument('--dataset', type=str, choices=['cc100', 'lihkg'], required=True)
+args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long'], required=True)
 args = args.parse_args()
 
 
@@ -47,7 +47,7 @@ combined_data = pos_results + pos_errors
 
 
 # Filter out entries with inputs containing specific substrings
-if args.dataset == 'cc100':
+if args.dataset == 'cc100_yue':
     raw_length = len(combined_data)
     filtered_data = [entry for entry in combined_data if '嘅發音' not in entry['input'] and 'Hotels.com' not in entry['input']]
     print(f"Number of low-quality entries filtered: {raw_length - len(filtered_data)}")
@@ -94,7 +94,9 @@ pp.pprint(list(dataset_dict["train"].select(range(1))))
 
 
 # Upload to Hugging Face Hub
-if args.dataset == 'cc100':
+if args.dataset == 'cc100_yue':
     dataset_dict.push_to_hub("AlienKevin/cc100-yue-tagged")
 elif args.dataset == 'lihkg':
     dataset_dict.push_to_hub("AlienKevin/lihkg-tagged")
+elif args.dataset == 'wiki_yue_long':
+    dataset_dict.push_to_hub("AlienKevin/wiki-yue-long-tagged")
