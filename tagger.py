@@ -630,6 +630,19 @@ def fix_hkcancor_tag(tag):
     return tag
 
 
+def infer(model_name, text, sliding, pos_lm, beam_size, device):
+    model = torch.load(f"models/{model_name}.pth", weights_only=False)
+    model.to(device)
+    model.eval()
+
+    if sliding:
+        hypothesis = merge_tokens(model.tag(text, device, pos_lm, beam_size))
+    else:
+        hypothesis = merge_tokens(model.tag(text, device))
+
+    return hypothesis
+
+
 def test(model_name, test_dataset, sliding, pos_lm, beam_size, segmentation_only, device):
     from spacy.training import Example
     from spacy.scorer import Scorer
@@ -690,7 +703,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Train or test the POS tagger model.')
-    parser.add_argument('--mode', choices=['train', 'test'], required=True, help='Mode to run the script in: train or test')
+    parser.add_argument('--mode', choices=['train', 'test', 'infer'], required=True, help='Mode to run the script in: train or test')
+    parser.add_argument('--text', type=str, default=None, help='Text to infer')
     parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
@@ -759,3 +773,8 @@ if __name__ == "__main__":
         test(model_name, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
         test(model_name, 'cc100', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+    elif args.mode == 'infer':
+        hypothesis = infer(model_name, args.text, sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, device=device)
+        formatted_hypothesis = ' '.join([f"{token}/{tag}" for token, tag in hypothesis])
+        print(f"{formatted_hypothesis}")
+        exit(0)
