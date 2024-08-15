@@ -14,7 +14,7 @@ base_url = "https://api.deepseek.com"
 with open('deepseek_api_key.txt', 'r') as file:
     api_key = file.read().strip()
 model_id = 'deepseek-chat'
-max_workers = 500
+max_workers = 1000
 
 client = OpenAI(api_key=api_key, base_url=base_url)
 
@@ -238,7 +238,7 @@ def generate_in_context_prompt(utterances):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument('--dataset', type=str, choices=['cc100', 'lihkg'], required=True)
+    args.add_argument('--dataset', type=str, choices=['cc100', 'lihkg', 'wiki_yue_long'], required=True)
     args.add_argument('--prompt_version', type=int, default=2, required=True)
     args.add_argument('--selective_in_context', action='store_true')
     args = args.parse_args()
@@ -272,6 +272,10 @@ if __name__ == "__main__":
         test_samples = load_dataset("raptorkwok/cantonese_sentences")['train']
         test_samples.shuffle(seed=42)
         test_samples = [sample['content'] for sample in test_samples if len(sample['content']) <= 100][:200000]
+    elif args.dataset == 'wiki_yue_long':
+        test_samples = load_dataset("R5dwMg/zh-wiki-yue-long")['train']
+        test_samples.shuffle(seed=42)
+        test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 200]
 
     # Create the output directory if it doesn't exist
     output_dir = f'{args.dataset}_outputs_v{args.prompt_version}'
