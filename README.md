@@ -339,24 +339,24 @@ Token Precision: 0.9078260869565218
 Token Recall: 0.9065123010130246
 
 
-pos_tagger_cc100_lihkg_embedding_dim_40_window_5
+pos_tagger_cc100_lihkg_embedding_dim_40
 
 ud_yue
 
-POS Tagging Accuracy: 0.8140900195694716
-Token F1 Score: 0.9103448275862068
-Token Precision: 0.9131437355880092
-Token Recall: 0.907563025210084
+POS Tagging Accuracy: 0.8170347003154574
+Token F1 Score: 0.9087408548324991
+Token Precision: 0.9161490683229814
+Token Recall: 0.9014514896867838
 
 cc100
 
-POS Tagging Accuracy: 0.879396984924623
-Token F1 Score: 0.9079061685490877
-Token Precision: 0.9084323384526224
-Token Recall: 0.9073806078147613
+POS Tagging Accuracy: 0.8818127962085308
+Token F1 Score: 0.9102005231037488
+Token Precision: 0.9139188794864312
+Token Recall: 0.9065123010130246
 
 
-pos_tagger_cc100_embedding_dim_40_window_5.pth
+pos_tagger_cc100_embedding_dim_40
 
 ud_yue
 
@@ -373,7 +373,7 @@ Token Precision: 0.9132712456344587
 Token Recall: 0.9082489146164978
 
 
-pos_tagger_lihkg_embedding_dim_40_window_5
+pos_tagger_lihkg_embedding_dim_40
 
 ud_yue
 

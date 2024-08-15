@@ -724,7 +724,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if args.window_size != 5 else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}{f'_crf' if args.crf else ''}"
+    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}{f'_crf' if args.crf else ''}"
 
     training_dataset = []
     for dataset in args.training_dataset:
