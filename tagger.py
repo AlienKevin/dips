@@ -578,11 +578,11 @@ def upos_id_to_str(upos_id):
     return names[upos_id]
 
 
-def load_ud_yue(split='test'):
+def load_ud(lang='yue',split='test'):
     from datasets import load_dataset
 
     # Load the universal_dependencies dataset from Hugging Face
-    dataset = load_dataset('universal-dependencies/universal_dependencies', 'yue_hk', trust_remote_code=True)
+    dataset = load_dataset('universal-dependencies/universal_dependencies', lang, trust_remote_code=True)
 
     # Gather all word segmented utterances
     utterances = [[(token, upos_id_to_str(pos)) for token, pos in zip(sentence['tokens'], sentence['upos'])] for sentence in dataset[split]]
@@ -651,11 +651,13 @@ def test(model_name, test_dataset, sliding, pos_lm, beam_size, segmentation_only
     import json
 
     if test_dataset == 'ud_yue':
-        test_dataset = load_ud_yue('test')
+        test_dataset = load_ud('yue_hk', 'test')
     elif test_dataset == 'cc100':
         test_dataset = load_tagged_dataset('cc100-yue', 'test')
     elif test_dataset == 'lihkg':
         test_dataset = load_tagged_dataset('lihkg', 'test')
+    elif test_dataset == 'ud_zh_hk':
+        test_dataset = load_ud('zh_hk', 'test')
 
     if segmentation_only:
         test_dataset = [[(token, 'X') for token, _ in utterance] for utterance in test_dataset]
@@ -771,6 +773,10 @@ if __name__ == "__main__":
     elif args.mode == 'test':
         print('Testing on UD Yue')
         test(model_name, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        print('Testing on UD ZH-HK')
+        test(model_name, 'ud_zh_hk', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        print('Testing on LIHKG')
+        test(model_name, 'lihkg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
         test(model_name, 'cc100', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
     elif args.mode == 'infer':
