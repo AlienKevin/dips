@@ -710,7 +710,7 @@ if __name__ == "__main__":
     parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
-    parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg'], required=True, help='Training dataset(s) to use')
+    parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg', 'wiki-yue-long'], required=True, help='Training dataset(s) to use')
     parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
     parser.add_argument('--crf', action='store_true', help='Whether to use CRF layer')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
@@ -736,6 +736,8 @@ if __name__ == "__main__":
             training_dataset.extend(load_tagged_dataset('cc100-yue', 'train'))
         elif dataset == 'lihkg':
             training_dataset.extend(load_tagged_dataset('lihkg', 'train'))
+        elif dataset == 'wiki_yue_long':
+            training_dataset.extend(load_tagged_dataset('wiki_yue_long', 'train'))
 
     random.seed(42)
     random.shuffle(training_dataset)
