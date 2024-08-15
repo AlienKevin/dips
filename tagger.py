@@ -8,6 +8,7 @@ import random
 from tqdm import tqdm
 import math
 import wandb
+from torchcrf import CRF
 
 
 class TaggerDataset(IterableDataset):
@@ -163,7 +164,7 @@ class LanguageModel:
 
 
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, embedding_dim):
+    def __init__(self, vocab, tagset, embedding_dim, use_crf=False):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
@@ -175,7 +176,11 @@ class Tagger(nn.Module):
         
         self.fc = nn.Linear(512, len(tagset))
         
-    def forward(self, x):
+        self.use_crf = use_crf
+        if use_crf:
+            self.crf = CRF(len(tagset), batch_first=True)
+        
+    def forward(self, x, tags=None):
         # x shape: (batch_size, sequence_length)
         embedded = self.embedding(x)  # (batch_size, sequence_length, embedding_dim)
 
@@ -190,9 +195,17 @@ class Tagger(nn.Module):
         x = x.transpose(1, 2)  # (batch_size, sequence_length, 512)
         
         # Apply fully connected layer to each time step
-        x = self.fc(x)  # (batch_size, sequence_length, len(tagset))
+        emissions = self.fc(x)  # (batch_size, sequence_length, len(tagset))
         
-        return x
+        if self.use_crf:
+            if tags is not None:
+                # Training mode
+                return -self.crf(emissions, tags)  # Negative log-likelihood
+            else:
+                # Inference mode
+                return self.crf.decode(emissions)
+        else:
+            return emissions
 
     def tag(self, text, device):
         # Convert text to tensor of indices
@@ -200,14 +213,16 @@ class Tagger(nn.Module):
         
         # Get model predictions
         with torch.no_grad():
-            outputs = self(indices)
-        
-        # Get the most likely tag for each character
-        _, predicted_tags = torch.max(outputs, dim=2)
+            if self.use_crf:
+                predicted_tags = self(indices)[0]  # CRF returns a list of lists, we take the first one
+            else:
+                outputs = self(indices)
+                _, predicted_tags = torch.max(outputs, dim=2)
+                predicted_tags = predicted_tags[0]  # Remove batch dimension
         
         # Convert tag indices to tag strings
         all_tags = list(self.tagset.keys())
-        tags = [all_tags[tag_id] for tag_id in predicted_tags[0]]
+        tags = [all_tags[tag_id] for tag_id in predicted_tags]
         
         # Pair each character with its predicted tag
         return [(char, tag) for char, tag in zip(text, tags)]
@@ -375,7 +390,7 @@ class SlidingTagger(nn.Module):
         return [(text[i], tag) for i, tag in enumerate(tags)]
 
 
-def train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
+def train_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
     best_loss = float('inf')
     step = 0
 
@@ -388,8 +403,11 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
             X = X.to(device)
             y = y.to(device)
             optimizer.zero_grad()
-            outputs = model(X)
-            loss = criterion(outputs.view(-1, outputs.shape[-1]), y.view(-1))
+            if model.use_crf:
+                loss = model(X, y)  # The forward method now returns the negative log-likelihood for CRF
+            else:
+                outputs = model(X)
+                loss = F.cross_entropy(outputs.view(-1, outputs.shape[-1]), y.view(-1))
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -407,8 +425,11 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
                     for X_val, y_val in validation_loader:
                         X_val = X_val.to(device)
                         y_val = y_val.to(device)
-                        outputs_val = model(X_val)
-                        loss_val = criterion(outputs_val.view(-1, outputs_val.shape[-1]), y_val.view(-1))
+                        if model.use_crf:
+                            loss_val = model(X_val, y_val)
+                        else:
+                            outputs_val = model(X_val)
+                            loss_val = F.cross_entropy(outputs_val.view(-1, outputs_val.shape[-1]), y_val.view(-1))
                         validation_loss += loss_val.item()
                 avg_validation_loss = validation_loss / len(validation_loader)
                 wandb.log({"validation_loss": avg_validation_loss}, step=step)
@@ -421,9 +442,10 @@ def train_model(model, model_name, train_loader, validation_loader, criterion, o
                 model.train()
 
 
-def train_sliding_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
+def train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
     best_loss = float('inf')
     step = 0
+    criterion = nn.CrossEntropyLoss()
 
     wandb.init(project="cantag", name=model_name)
 
@@ -516,21 +538,20 @@ def load_tagged_dataset(dataset_name, split='train'):
 
 
 def train(model_name, train_loader, validation_loader, vocab, tagset, sliding, window_size,
-          tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, device):
+          tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, use_crf, device):
     if sliding:
         model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
     else:
-        model = Tagger(vocab, tagset, embedding_dim).to(device)
+        model = Tagger(vocab, tagset, embedding_dim, use_crf).to(device)
     
     torch.save(model, f"models/{model_name}.pth")
 
-    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     if sliding:
-        train_sliding_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs=5, device=device)
+        train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs=5, device=device)
     else:
-        train_model(model, model_name, train_loader, validation_loader, criterion, optimizer, num_epochs=5, device=device)
+        train_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs=5, device=device)
 
 
 def upos_id_to_str(upos_id):
@@ -675,6 +696,7 @@ if __name__ == "__main__":
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
     parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg'], required=True, help='Training dataset(s) to use')
     parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
+    parser.add_argument('--crf', action='store_true', help='Whether to use CRF layer')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
     parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
@@ -688,7 +710,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if args.window_size != 5 else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if args.window_size != 5 else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}_window_{args.window_size}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}{f'_crf' if args.crf else ''}"
 
     training_dataset = []
     for dataset in args.training_dataset:
@@ -731,7 +753,7 @@ if __name__ == "__main__":
     if args.mode == 'train':
         train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset,
               args.sliding, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim,
-              args.autoregressive_scheme, args.network_type, args.network_depth, device)
+              args.autoregressive_scheme, args.network_type, args.network_depth, args.crf, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
         test(model_name, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
