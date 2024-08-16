@@ -176,8 +176,8 @@ class Tagger(nn.Module):
             self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=1)
         elif network_type.startswith('dilated_cnn'):
             self.conv1 = nn.Conv1d(embedding_dim, 128, kernel_size=3, padding=1)
-            self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=1, dilation=2)
-            self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=1, dilation=2)
+            self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=2, dilation=2)
+            self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=2, dilation=2)
         
         self.fc = nn.Linear(512, len(tagset))
         
