@@ -782,7 +782,7 @@ if __name__ == "__main__":
                        load_weights=args.mode in ['test', 'infer'])
 
     if args.mode == 'train':
-        train(model_name, model, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.sliding, device)
+        train(model_name, model, train_loader, validation_loader, args.sliding, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
         test(model, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
