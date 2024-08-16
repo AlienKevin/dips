@@ -623,9 +623,11 @@ def merge_tokens(tagged_characters):
     return merged_tokens
 
 
-def fix_hkcancor_tag(tag):
+def fix_tag(tag):
     if tag == 'V':
         return 'VERB'
+    elif tag == '[PAD]':
+        return 'NOUN'
     return tag
 
 
@@ -675,8 +677,8 @@ def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, dev
         else:
             hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device))
         reference_tokens = [token for token, _ in reference]
-        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[fix_hkcancor_tag(tag) for _, tag in reference])
-        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[fix_hkcancor_tag(tag) for _, tag in hypothesis])
+        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[fix_tag(tag) for _, tag in reference])
+        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[fix_tag(tag) for _, tag in hypothesis])
         example = Example(predicted_doc, target)
         examples.append(example)
 
