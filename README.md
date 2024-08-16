@@ -19,12 +19,19 @@ Token F1 Score: 0.7146455559553797
 Token Precision: 0.6755102040816326
 Token Recall: 0.758594346829641
 
-electra-hongkongese-small
+electra-hongkongese-small-hkcancor
 
 POS Tagging Accuracy: 0.735550277117973
 Token F1 Score: 0.7559772296015179
 Token Precision: 0.751131221719457
 Token Recall: 0.7608861726508785
+
+electra-hongkongese-small-wiki-lihkg-cc100
+
+POS Tagging Accuracy: 0.7654320987654321
+Token F1 Score: 0.7668828691339183
+Token Precision: 0.7660060975609756
+Token Recall: 0.7677616501145913
 
 pycantonese
 

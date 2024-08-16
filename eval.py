@@ -68,6 +68,7 @@ def patch_pycantonese_tag_bug(tag):
 if __name__ == "__main__":
     # model_name = "AlienKevin/bert_base_cantonese_pos_hkcancor"
     model_name = "AlienKevin/electra_hongkongese_small_pos_hkcancor"
+    # model_name = "AlienKevin/electra_hongkongese_small_pos_wiki_lihkg_cc100"
 
     sample_size = 100
 
