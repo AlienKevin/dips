@@ -164,20 +164,25 @@ class LanguageModel:
 
 
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, embedding_dim, use_crf=False):
+    def __init__(self, vocab, tagset, embedding_dim, network_type):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
         self.embedding = nn.Embedding(len(vocab), embedding_dim)
         
-        self.conv1 = nn.Conv1d(embedding_dim, 128, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=1)
+        if network_type.startswith('cnn'):
+            self.conv1 = nn.Conv1d(embedding_dim, 128, kernel_size=3, padding=1)
+            self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=1)
+            self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=1)
+        elif network_type.startswith('dilated_cnn'):
+            self.conv1 = nn.Conv1d(embedding_dim, 128, kernel_size=3, padding=1)
+            self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=1, dilation=2)
+            self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=1, dilation=2)
         
         self.fc = nn.Linear(512, len(tagset))
         
-        self.use_crf = use_crf
-        if use_crf:
+        self.use_crf = network_type.endswith('crf')
+        if self.use_crf:
             self.crf = CRF(len(tagset), batch_first=True)
         
     def forward(self, x, tags=None):
@@ -537,13 +542,7 @@ def load_tagged_dataset(dataset_name, split='train'):
         return dataset
 
 
-def train(model_name, train_loader, validation_loader, vocab, tagset, sliding, window_size,
-          tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, use_crf, device):
-    if sliding:
-        model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
-    else:
-        model = Tagger(vocab, tagset, embedding_dim, use_crf).to(device)
-    
+def train(model_name, model, train_loader, validation_loader, sliding, device):
     torch.save(model, f"models/{model_name}.pth")
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -630,9 +629,7 @@ def fix_hkcancor_tag(tag):
     return tag
 
 
-def infer(model_name, text, sliding, pos_lm, beam_size, device):
-    model = torch.load(f"models/{model_name}.pth", weights_only=False)
-    model.to(device)
+def infer(model, text, sliding, pos_lm, beam_size, device):
     model.eval()
 
     if sliding:
@@ -643,7 +640,7 @@ def infer(model_name, text, sliding, pos_lm, beam_size, device):
     return hypothesis
 
 
-def test(model_name, test_dataset, sliding, pos_lm, beam_size, segmentation_only, device):
+def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, device):
     from spacy.training import Example
     from spacy.scorer import Scorer
     from spacy.tokens import Doc
@@ -667,8 +664,6 @@ def test(model_name, test_dataset, sliding, pos_lm, beam_size, segmentation_only
 
     test_dataset = test_dataset[:100]
 
-    model = torch.load(f"models/{model_name}.pth", weights_only=False)
-    model.to(device)
     model.eval()
 
     V = Vocab()
@@ -701,6 +696,18 @@ def test(model_name, test_dataset, sliding, pos_lm, beam_size, segmentation_only
     print(f"Token Recall: {results['token_r']}")
 
 
+def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, device, load_weights=False):
+    if sliding:
+        model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
+    else:
+        model = Tagger(vocab, tagset, embedding_dim, network_type).to(device)
+    
+    if load_weights:
+        model.load_state_dict(torch.load(f"models/{model_name}.pth", weights_only=False).state_dict())
+
+    return model.to(device)
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -712,21 +719,20 @@ if __name__ == "__main__":
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
     parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg', 'wiki-yue-long'], required=True, help='Training dataset(s) to use')
     parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
-    parser.add_argument('--crf', action='store_true', help='Whether to use CRF layer')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
     parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
     parser.add_argument('--autoregressive_scheme', default=None, choices=['teacher_forcing'])
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
-    parser.add_argument('--network_type', choices=['mlp', 'cnn'], default='mlp', help='Type of the tagger neural network')
+    parser.add_argument('--network_type', choices=['mlp', 'cnn', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf'], default='mlp', help='Type of the tagger neural network')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--segmentation_only', action='store_true', help='Whether to only segment the text')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}{f'_crf' if args.crf else ''}"
+    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     training_dataset = []
     for dataset in args.training_dataset:
@@ -768,21 +774,26 @@ if __name__ == "__main__":
     if args.use_pos_lm:
         pos_lm = LanguageModel([item[1] for item in train_dataset], train_data.tagset, 2)
 
+    model = load_model(model_name, train_data.vocab, train_data.tagset, sliding=args.sliding,
+                       window_size=args.window_size, tag_context_size=args.tag_context_size,
+                       embedding_type=args.embedding_type, embedding_dim=args.embedding_dim,
+                       autoregressive_scheme=args.autoregressive_scheme,
+                       network_type=args.network_type, network_depth=args.network_depth, device=device,
+                       load_weights=args.mode in ['test', 'infer'])
+
     if args.mode == 'train':
-        train(model_name, train_loader, validation_loader, train_data.vocab, train_data.tagset,
-              args.sliding, args.window_size, args.tag_context_size, args.embedding_type, args.embedding_dim,
-              args.autoregressive_scheme, args.network_type, args.network_depth, args.crf, device)
+        train(model_name, model, train_loader, validation_loader, train_data.vocab, train_data.tagset, args.sliding, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
-        test(model_name, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on UD ZH-HK')
-        test(model_name, 'ud_zh_hk', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model, 'ud_zh_hk', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on LIHKG')
-        test(model_name, 'lihkg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model, 'lihkg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
-        test(model_name, 'cc100', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model, 'cc100', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
     elif args.mode == 'infer':
-        hypothesis = infer(model_name, args.text, sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, device=device)
+        hypothesis = infer(model, args.text, sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, device=device)
         formatted_hypothesis = ' '.join([f"{token}/{tag}" for token, tag in hypothesis])
         print(f"{formatted_hypothesis}")
         exit(0)
