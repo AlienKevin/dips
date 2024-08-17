@@ -170,23 +170,28 @@ class Tagger(nn.Module):
         self.tagset = tagset
         self.embedding = nn.Embedding(len(vocab), embedding_dim)
 
+        self.network_type = network_type
         self.network_depth = network_depth
 
         # feature_dims = [128, 256, 512]
         feature_dims = [64, 128, 256]
-        
-        self.conv1 = nn.ModuleList([
-            nn.Conv1d(embedding_dim, feature_dims[0], kernel_size=k, padding='same')
-            for k in kernel_sizes
-        ])
 
         if 'cnn' in network_type:
+            self.conv1 = nn.ModuleList([
+                nn.Conv1d(embedding_dim, feature_dims[0], kernel_size=k, padding='same')
+                for k in kernel_sizes
+            ])
+
             if network_depth >= 2:
                 self.conv2 = nn.Conv1d(feature_dims[0] * len(kernel_sizes), feature_dims[1], kernel_size=3, padding='same', dilation=2 if 'dilated' in network_type else 1)
             if network_depth >= 3:
                 self.conv3 = nn.Conv1d(feature_dims[1], feature_dims[2], kernel_size=3, padding='same', dilation=2 if 'dilated' in network_type else 1)
-
-        self.fc = nn.Linear(feature_dims[network_depth - 1], len(tagset))
+            
+            self.fc = nn.Linear(feature_dims[network_depth - 1], len(tagset))
+        elif 'bi-lstm' in network_type:
+            self.lstm = nn.LSTM(embedding_dim, feature_dims[0], num_layers=network_depth, bidirectional=True, batch_first=True)
+            # Double the feature dimension because it's bidirectional
+            self.fc = nn.Linear(feature_dims[0] * 2, len(tagset))
         
         self.use_crf = 'crf' in network_type
         if self.use_crf:
@@ -196,22 +201,25 @@ class Tagger(nn.Module):
         # x shape: (batch_size, sequence_length)
         embedded = self.embedding(x)  # (batch_size, sequence_length, embedding_dim)
 
-        # Transpose for 1D convolution
-        x = embedded.transpose(1, 2)  # (batch_size, embedding_dim, sequence_length)
-        
-        conv_outputs = []
-        for conv in self.conv1:
-            conv_output = F.relu(conv(x))
-            conv_outputs.append(conv_output)
-        x = torch.cat(conv_outputs, dim=1)
-        if self.network_depth >= 2:
-            x = F.relu(self.conv2(x))
-        if self.network_depth >= 3:
-            x = F.relu(self.conv3(x))
-        
-        # Transpose back
-        x = x.transpose(1, 2)  # (batch_size, sequence_length, 512)
-        
+        if 'cnn' in self.network_type:
+            # Transpose for 1D convolution
+            x = embedded.transpose(1, 2)  # (batch_size, embedding_dim, sequence_length)
+            
+            conv_outputs = []
+            for conv in self.conv1:
+                conv_output = F.relu(conv(x))
+                conv_outputs.append(conv_output)
+            x = torch.cat(conv_outputs, dim=1)
+            if self.network_depth >= 2:
+                x = F.relu(self.conv2(x))
+            if self.network_depth >= 3:
+                x = F.relu(self.conv3(x))
+            
+            # Transpose back
+            x = x.transpose(1, 2)  # (batch_size, sequence_length, 512)
+        elif 'bi-lstm' in self.network_type:
+            x, _ = self.lstm(embedded)
+
         # Apply fully connected layer to each time step
         emissions = self.fc(x)  # (batch_size, sequence_length, len(tagset))
         
@@ -784,7 +792,7 @@ if __name__ == "__main__":
     parser.add_argument('--autoregressive_scheme', default=None, choices=['teacher_forcing'])
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
-    parser.add_argument('--network_type', choices=['mlp', 'cnn', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf'], default='mlp', help='Type of the tagger neural network')
+    parser.add_argument('--network_type', choices=['mlp', 'cnn', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf', 'bi-lstm'], default='mlp', help='Type of the tagger neural network')
     parser.add_argument('--kernel_sizes', nargs='+', type=int, default=[3], help='Kernel sizes for the CNN')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--segmentation_only', action='store_true', help='Whether to only segment the text')
