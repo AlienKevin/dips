@@ -309,7 +309,7 @@ if __name__ == "__main__":
         test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 200]
     elif args.dataset == 'genius_zh_cn':
         test_samples = load_dataset("beyond/chinese_clean_passages_80m")['train']
-        test_samples = test_samples.select(range(10000))['passage']
+        test_samples = test_samples.select(range(50000))['passage']
 
     # Create the output directory if it doesn't exist
     output_dir = f'{args.dataset}_outputs_v{args.prompt_version}'

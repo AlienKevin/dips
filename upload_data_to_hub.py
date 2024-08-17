@@ -5,7 +5,7 @@ import argparse
 
 
 args = argparse.ArgumentParser()
-args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long'], required=True)
+args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long', 'genius_zh_cn'], required=True)
 args = args.parse_args()
 
 
@@ -100,3 +100,5 @@ elif args.dataset == 'lihkg':
     dataset_dict.push_to_hub("AlienKevin/lihkg-tagged")
 elif args.dataset == 'wiki_yue_long':
     dataset_dict.push_to_hub("AlienKevin/wiki-yue-long-tagged")
+elif args.dataset == 'genius_zh_cn':
+    dataset_dict.push_to_hub("AlienKevin/genius-zh-cn-tagged")
