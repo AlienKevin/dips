@@ -534,13 +534,35 @@ def load_helper(dataset):
     return tagged_corpus
 
 
+def load_ud(lang='yue',split='test'):
+    from datasets import load_dataset
+
+    # Load the universal_dependencies dataset from Hugging Face
+    dataset = load_dataset('universal-dependencies/universal_dependencies', lang, trust_remote_code=True)
+    
+    dataset = dataset.map(lambda example: {
+        'tokens': [normalize(token) for token in example['tokens']]
+    })
+
+    # Gather all word segmented utterances
+    utterances = [[(token, upos_id_to_str(pos)) for token, pos in zip(sentence['tokens'], sentence['upos'])] for sentence in dataset[split]]
+
+    return utterances
+
+
 def load_hkcancor():
     dataset = load_dataset('nanyang-technological-university-singapore/hkcancor', split='train')
+    dataset = dataset.map(lambda example: {
+        'tokens': [normalize(token) for token in example['tokens']]
+    })
     return load_helper(dataset)
 
 
 def load_tagged_dataset(dataset_name, split='train'):
     dataset = load_dataset(f'AlienKevin/{dataset_name}-tagged', split=split)
+    dataset = dataset.map(lambda example: {
+        'tokens': [normalize(token) for token in example['tokens']]
+    })
     if split == 'test':
         label_names = dataset.features["pos_tags_ud"].feature.names
         id2label = { i:k for i, k in enumerate(label_names) }
@@ -590,18 +612,6 @@ def upos_id_to_str(upos_id):
     return names[upos_id]
 
 
-def load_ud(lang='yue',split='test'):
-    from datasets import load_dataset
-
-    # Load the universal_dependencies dataset from Hugging Face
-    dataset = load_dataset('universal-dependencies/universal_dependencies', lang, trust_remote_code=True)
-
-    # Gather all word segmented utterances
-    utterances = [[(token, upos_id_to_str(pos)) for token, pos in zip(sentence['tokens'], sentence['upos'])] for sentence in dataset[split]]
-
-    return utterances
-
-
 def merge_tokens(tagged_characters):
     merged_tokens = []
     current_token = []
@@ -646,6 +656,8 @@ def fix_tag(tag):
 
 def infer(model, text, sliding, pos_lm, beam_size, device):
     model.eval()
+
+    text = normalize(text)
 
     if sliding:
         hypothesis = merge_tokens(model.tag(text, device, pos_lm, beam_size))
@@ -721,6 +733,38 @@ def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size
         model.load_state_dict(torch.load(f"models/{model_name}.pth", weights_only=False).state_dict())
 
     return model.to(device)
+
+
+# Read the STCharacters.txt file and create a mapping dictionary
+t2s = {}
+with open('STCharacters.txt', 'r', encoding='utf-8') as f:
+    for line in f:
+        parts = line.strip().split('\t')
+        if len(parts) == 2:
+            simplified, traditional = parts
+            for char in traditional.split():
+                t2s[char] = simplified
+
+
+def normalize(text):
+    """
+    Simplify traditional Chinese text to simplified Chinese.
+
+    Args:
+        text (str): The input traditional Chinese text.
+
+    Returns:
+        str: The simplified Chinese text.
+
+    Example:
+        >>> normalize("漢字")
+        '汉字'
+        >>> normalize("這是一個測試")
+        '这是一个测试'
+        >>> normalize("Hello, 世界!")
+        'Hello, 世界!'
+    """
+    return ''.join(t2s.get(char, char) for char in text)
 
 
 if __name__ == "__main__":
