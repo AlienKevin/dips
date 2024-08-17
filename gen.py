@@ -9,6 +9,7 @@ import os
 import argparse
 import re
 from datasets import load_dataset
+import opencc
 
 base_url = "https://api.deepseek.com"
 with open('deepseek_api_key.txt', 'r') as file:
@@ -63,6 +64,10 @@ def segment_words(prompt_prefix, input_sentence, in_context_samples):
         
         # Generate in-context prompt using the closest samples
         samples = generate_in_context_prompt(closest_samples)
+    
+    # Write prompt and samples to a file
+    with open('prompt_sample.txt', 'w', encoding='utf-8') as f:
+        f.write(f'{prompt_prefix}\n\n{samples}')
 
     attempts = 0
     while True:
@@ -109,13 +114,25 @@ def segment_words(prompt_prefix, input_sentence, in_context_samples):
                 return {'error': str(e), 'result': result}
 
 
-def load_hkcancor(min_tokens, max_tokens):
-    dataset = load_dataset("nanyang-technological-university-singapore/hkcancor", trust_remote_code=True)
+def load_prompt_dataset(dataset_name, min_tokens, max_tokens):
+    if dataset_name == 'hkcancor':
+        dataset_name = 'nanyang-technological-university-singapore/hkcancor'
+        subset_name=None
+        split_name='train'
+        pos_tag_name = 'pos_tags_ud'
+    elif dataset_name == 'zh_pud':
+        dataset_name = 'universal-dependencies/universal_dependencies'
+        subset_name = 'zh_pud'
+        split_name='test'
+        pos_tag_name = 'upos'
 
-    label_names = dataset["train"].features["pos_tags_ud"].feature.names
+
+    dataset = load_dataset(path=dataset_name, name=subset_name, trust_remote_code=True)
+
+    label_names = dataset[split_name].features[pos_tag_name].feature.names
     id2name = {id: name for id, name in enumerate(label_names)}
 
-    utterances = [[[token, id2name[pos]] for token, pos in zip(utterance['tokens'], utterance['pos_tags_ud'])] for utterance in dataset['train'] if len(utterance['tokens']) <= max_tokens and len(utterance['tokens']) >= min_tokens]
+    utterances = [[[token, id2name[pos]] for token, pos in zip(utterance['tokens'], utterance[pos_tag_name])] for utterance in dataset[split_name] if len(utterance['tokens']) <= max_tokens and len(utterance['tokens']) >= min_tokens]
 
     return utterances
 
@@ -238,28 +255,42 @@ def generate_in_context_prompt(utterances):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long'], required=True)
+    args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long', 'genius_zh_cn'], required=True)
+    args.add_argument('--prompt_dataset', type=str, choices=['hkcancor', 'zh_pud'], required=True)
+    args.add_argument('--prompt_language', type=str, choices=['zh', 'yue'], required=True)
+    args.add_argument('--prompt_script', type=str, choices=['simplified', 'traditional'], required=True)
     args.add_argument('--prompt_version', type=int, default=2, required=True)
     args.add_argument('--selective_in_context', action='store_true')
     args = args.parse_args()
 
-    with open(f'prompt_v{args.prompt_version}.txt', 'r') as file:
+    with open(f'prompt_v{args.prompt_version}_{args.prompt_language}.txt', 'r') as file:
         prompt_prefix = file.read()
 
+    if args.prompt_script == 'simplified':
+        prompt_prefix = opencc.OpenCC('t2s').convert(prompt_prefix)
+
     if args.selective_in_context:
-        in_context_utterances = load_hkcancor(min_tokens=0, max_tokens=99999)
+        in_context_utterances = load_prompt_dataset(dataset_name=args.prompt_dataset, min_tokens=0, max_tokens=99999)
         in_context_utterances = [segment for utterance in in_context_utterances for segment in cut_utterance(utterance)]
         in_context_utterances = [utterance for utterance in in_context_utterances if len(utterance) >= 5 and len(utterance) <= 40]
     else:
-        in_context_utterances = load_hkcancor(min_tokens=5, max_tokens=20)
+        in_context_utterances = load_prompt_dataset(dataset_name=args.prompt_dataset, min_tokens=5, max_tokens=20)
         random.seed(42)
         in_context_utterances = random.sample(in_context_utterances, 10)
     
     # Compute Sim for utterances and store as hkcancor_hash_table
     in_context_samples = {}
+
+    if args.prompt_script == 'simplified':
+        converter = opencc.OpenCC('t2s')
+
     for utterance in in_context_utterances:
+        if args.prompt_script == 'simplified':
+            utterance = [(converter.convert(word), pos) for word, pos in utterance]
+
         # Convert the utterance to a string representation
         utterance_str = ''.join([word for word, pos in utterance])
+
         # Compute Sim for the utterance
         hash_value = Sim(utterance_str)
         # Store the hash value with the utterance as the key
@@ -276,6 +307,9 @@ if __name__ == "__main__":
         test_samples = load_dataset("R5dwMg/zh-wiki-yue-long")['train']
         test_samples.shuffle(seed=42)
         test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 200]
+    elif args.dataset == 'genius_zh_cn':
+        test_samples = load_dataset("beyond/chinese_clean_passages_80m")['train']
+        test_samples = test_samples.select(range(10000))['passage']
 
     # Create the output directory if it doesn't exist
     output_dir = f'{args.dataset}_outputs_v{args.prompt_version}'

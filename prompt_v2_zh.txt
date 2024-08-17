@@ -1,0 +1,232 @@
+You are an expert at Chinese word segmentation and POS tagging. Output the segmented words with their parts of speech as JSON arrays. ALWAYS preserve typos, fragmented chunks, and punctuations in the original sentence. Output the parts of speech in the Universal Dependencies v2 tagset with 17 tags:
+
+
+ADJ: Adjectives are words that typically modify nouns and specify their properties or attributes. They may also function as predicates. These include the categories known as 區別詞 and 形容詞.
+
+好/ADJ 風景
+天氣 很 好/ADJ
+
+The adjective may be accompanied by the particle 的 when functioning as a prenominal modifier (for either 區別詞 or 形容詞), and obligatorily when functioning as a predicate if it is a 區別詞.
+
+美麗/ADJ 的 風景
+這 隻 鳥 是 雌/ADJ 的
+
+Note that ordinal numerals such as 第一 and 第三 are to be treated as adjectives and tagged ADJ per UD specifications, even though they are traditionally classified as numerals in Chinese.
+
+Examples
+形容詞: 好, 美麗, 小, 老
+區別詞: 金, 男, 慢性
+Ordinal numbers: 第一, 第三, 第五十三
+
+
+ADP: The Chinese ADP covers three categories of function words analyzed as adpositions: (1) prepositions, (2) valence markers, and (3) “localizers”/postpositions.
+
+Chinese coverbs introduce an extra participant/argument to the event/main verb in a clause (but note that many coverbs may also function as main verbs).
+
+他 對/ADP 我 做 了 很 殘忍 的 事情
+
+Valence markers such as the “disposal” 把 and the “long passive” 被 (when followed by an agent noun) are also tagged ADP (however, the “short passive” 被 when not followed by a noun should be tagged AUX).
+
+你 把/ADP 它 吃 掉 吧
+我 被/ADP 他 打 了 一 頓
+
+Localizers (also known as 方位詞), typically indicate spatial information in relation to the noun preceding it. Some localizers have also grammaticalized into clausal markers indicating temporal information. Localizers with the clausal function are still tagged as ADP (but are labeled with the dependency relation mark).
+
+我 把 梨子 放 在 桌子 上/ADP
+他 妻子 死 了 之後/ADP ， 他 也 不 想 活 了
+
+Examples
+Prepositions: 在, 對, 跟, 用, 為了
+Valence markers: 把, 將, 被 (long passive only)
+Postpositions: (之)上, (以)下, 內, 後, 前, 中, 時
+
+
+ADV:Adverbs (副詞) typically modify verbs, adjectives, and other adverbs for such categories as time, manner, degree, frequency, or negation.
+
+你 慢慢/ADV 說
+她 非常/ADV 快樂
+他們 很/ADV 早/ADV 起來
+
+Some adverbs also modify clauses with conjunctive and discursive functions.
+
+他 卻/ADV 沒有 跟 我 説
+今天 當然/ADV 沒 人 啊
+
+A small number of adverbs may also modify numerals and determiners, or nouns and pronouns.
+
+差不多/ADV 五千
+連/ADV 他 都 不 去 了
+
+There is a closed subclass of pronominal adverbs that refer to circumstances in context, rather than naming them directly; similarly to pronouns, these can be categorized as interrogative, demonstrative, etc. These should be treated as adverbs when modifying a predicate, but otherwise some of them can function as a nominal in the syntax, in which case they should be tagged PRON.
+
+你 為什麼/ADV 不 來
+我 這樣/ADV 做 的
+
+Note that although some adverbs express temporal information, many common time expressions (e.g., 今天, 去年, 晚上) are actually nouns and should be tagged NOUN.  Those temporal nouns can pre-modify another noun by adding a 的 suffix but adverbs cannot.
+
+Examples
+Manner adverbs: 慢慢, 互相
+Temporal, aspectual, and modal adverbs: 即將, 將, (正)在, 寧可, 可能 “possibly” (NB: also ADJ “possible” and NOUN “possibility”)
+Conjunctive adverbs: 所以, 卻, 例如, 然後, 那, 就
+Frequency and duration adverbs: 經常, 一下, 多次
+Negation adverbs: 不, 未, 永不
+Numeral-modifying adverbs: 大概, 差不多, 不足, 至少, 最多
+Noun-modifying adverbs: 連, 又
+Pronominal adverbs: 怎樣, 這樣, 那麼, 為什麼
+Other: 都, 也, 才, 越來越, 當然, 難道, 比如, 比如說, 例如, 譬如, 像  (note this can also function as a main verb; an example of the adverbial usage is 像他昨天說…)
+
+AUX: An auxiliary is a word that accompanies the lexical verb of a verb phrase and expresses grammatical distinctions not carried by the lexical verb, such as person, number, tense, mood, aspect, and voice.
+
+In Chinese, auxiliaries can be divided into modal and modal-like auxiliaries which are preverbal and do not have to be adjacent to the verb; copulae, in the narrow sense of pure linking words for nonverbal predication; and aspect markers, which must come immediately after the verb. Note that certain modal auxiliaries can also function as main verbs, usually when they have a direct object or full clausal complement.
+
+Examples
+Modal and modal-like auxiliaries: Can be pre-modified by the negator 不 but cannot take object and be post-modified by aspect marker. Examples: 能, 會, 可以, 應該, 肯, 敢, 有 (perfective), 沒有 (negative perfective)
+Aspect markers: 了 (perfective), 著/着 Copulae
+是, 為 (durative), 過 (experiential)
+
+CCONJ: A coordinating conjunction is a word that links words or larger constituents without syntactically subordinating one to the other and expresses a semantic relationship between them.
+
+Examples
+“and”: 與, 和, 跟, 同, 以及, 並, 並且, 而, 而且, 且. Note that 與, 和, 跟, 同 may also function as prepositions (ADP)
+“or”: 或, 或者, 還是
+“but”: 但, 但是
+
+
+DET: Determiners are words that modify nouns or noun phrases and express the reference of the noun phrase in context.
+
+Note that Chinese does not traditionally define determiners as a separate word class, but categorizes them as pronouns and/or adjectives. For this reason, in the UD framework some words in Cantonese may function as determiners and be tagged DET in one syntactic context (i.e., when modifying a noun), and as pronouns (tagged PRON) when behaving as a nominal or the head of a nominal phrase.
+
+Examples
+Demonstrative determiners: 這, 這些, 此, 那, 那些, 該
+Possessive determiner: 其, 本
+Quantifying determiners:
+Definite: 各, 諸, 每, 整, 全, 全部, 一切, 所有
+Indefinite: 任何, 有的, 有些, 多, 少, 幾, 許多, 若干, 大部分, 大量, 不少, 多數
+Interrogative determiners: 哪, 哪樣, 什麼, 何, 多少
+Other: 上, 下, 前, 後, 頭, 其餘, 某, 某些, 其他, 另, 同
+
+
+INTJ: An interjection is a word that is used most often as an exclamation or part of an exclamation. It typically expresses an emotional reaction, is not syntactically related to other accompanying expressions, and may include a combination of sounds not otherwise found in the language.
+
+Note that words primarily belonging to another part of speech retain their original category when used in exclamations. For example, 是！ would still be tagged VERB.
+
+Onomatopoeic words (擬聲詞) should only be treated as interjections if they are used as an exclamation (e.g., 喵!), otherwise they should be tagged according to their syntactic function in context (often as adverbs in Chinese, e.g., 他們 嘰嘰喳喳/ADV 地 聊天).
+
+Examples: 哦, 哎哟, 嗨, 欸
+
+
+NOUN: Nouns are a part of speech typically denoting a person, place, thing, animal, or idea.
+
+The NOUN tag is intended for common nouns only. See PROPN for proper nouns and PRON for pronouns.
+
+As a special case, classifiers (量詞) are also tagged NOUN per UD guidelines.
+
+Examples
+Nouns: 杯子, 草, 氧氣, 地方, 能力, 歷史
+Classifiers: 個, 條, 本, 雙, 杯, 磅, 年
+Temporal nouns: 今天, 去年, 晚上
+Position words: 旁邊, 一旁
+Localizers: 西
+
+
+NUM: A numeral is a word, functioning most typically as a determiner, a pronoun or an adjective, that expresses a number and a relation to the number, such as quantity, sequence, frequency or fraction.
+
+Cardinal numerals are covered by NUM regardless of syntactic function and regardless of whether they are expressed as words (五 “five”) or digits (5). By contrast, ordinal numerals (such as 第一) are always tagged ADJ.
+
+Examples: 1, 2, 3, 4, 5, 100, 10,358, 5.23, 3/4, 一, 二, 三, 一百, 五十六, 一萬三百五十八, 四分之三
+
+
+PART: Particles are function words that must be associated with another word, phrase, or clause to impart meaning and that do not satisfy definitions of other universal parts of speech (such as ADP, AUX, CCONJ, or SCONJ).
+
+In Chinese, particles include the genitive/associative/relativizer/nominalizer marker 的; 得 in V-得 extent/descriptive constructions; the manner adverbializer 地; the “et cetera” markers 等(等); sentence-final particles (句末助詞); and the object relativizer 所.
+
+Examples
+Genitive 的: 狗 的/PART 尾巴
+Associative 的: 高興 的/PART 孩子
+Relativizer 的: 走路 的/PART 人
+Nominalizer 的: 吃 不 完 的/PART 不 准 走
+Extent/descriptive 得: 他 跑 得/PART 很 快
+Adverbializer 地: 佢 慢慢 地/PART 跑
+Etc. marker: 這裡 有 梨子 ， 橘子 ， 等等/PART
+Sentence-final particles:
+你 想 去 嗎/PART ？
+我們 一起 去 吧/PART
+他 只 是 一 個 人 而已/PART
+他們 一定 來 的/PART
+Object relativizer 所: 他 所/PART 戴 的 帽子
+
+
+PRON: Pronouns are words that substitute for nouns or noun phrases, whose meaning is recoverable from the linguistic or extralinguistic context. Some pronouns – in particular certain demonstrative, total, indefinite, and interrogatives pronouns – may also function as determiners (DET) and are tagged as such when functioning as a modifier of a noun.
+
+Examples
+Personal pronouns: 我, 你, 妳, 您, 他, 她, 怹, 祂, 牠, 它, 之, 我們, 你們, 妳們, 您們, 他們, 她們, 牠們, 它們, 人家
+Reciprocal and reflexive pronouns: 彼此, 自身, 己身, 自己, 我自己, 你自己, 她們自己
+Demonstrative pronouns: 這, 這些, 此, 那, 那些
+Total pronouns: 全部, 一切, 所有, 大家, 大伙兒
+Indefinite pronouns: 任何, 有的, 有些, 很多, 很少, 許多, 若干, 大部分, 大量, 不少, 多數, 另外, 其他
+Locational pronouns: 這裡, 那裡
+Manner pronouns: 這樣(子) (also ADV), 那樣(子)
+Interrogative pronouns: 誰, 什麼, 多少, 哪裡, 哪樣, 何樣, 怎樣
+Other:
+X + 方: 對方, 雙方, 己方, 一方, 三方
+X + 者: 前者, 後者, 兩者, 三者
+其餘
+
+
+PROPN: A proper noun is a noun (or nominal content word) that is the name (or part of the name) of a specific individual, place, or object. For institutional names that contain regular words belonging to other parts of speech such as nouns (e.g., 公司, 大學, etc.), those words should be segmented as their own tokens and still tagged their native part of speech; only the proper nouns in such complex names should be tagged PROPN.
+
+Examples
+孔子/PROPN
+亞洲/PROPN
+威威/PROPN 木材 公司
+
+
+PUNCT: Punctuation marks are character groups used to delimit linguistic units in printed text.
+
+Punctuation is not taken to include logograms such as $, %, and §, which are instead tagged as SYM.
+
+Examples
+Period: 。
+Comma: ， 、
+Quotation marks: ‘ ’ “ ”「 」 『 』
+Title marks: 《 》
+
+
+SCONJ: A subordinating conjunction is a conjunction that links constructions by making one of them a constituent of the other. The subordinating conjunction typically marks the incorporated constituent which has the status of a subordinate clause.
+
+Subordinating conjunctions in Cantonese include all markers of subordinate clauses, including conditional clauses, purpose clauses, etc.
+
+In paired clauses where both clauses are marked by a conjunctive word and the first is subordinate to the second, we treat the conjunctive word in the first clause as SCONJ, whereas the one in the second, main clause as an adverb (ADV) (e.g., 雖然/SCONJ… 可是/ADV…).
+
+Examples: 如果, 的話, 雖然, 儘管, 無論
+來, 去, 以: 伸 出 你 的 手 來/SCONJ 看看
+
+
+SYM: A symbol is a word-like entity that differs from ordinary words by form, function, or both.
+
+Many symbols are or contain special non-alphanumeric, non-standard logographic characters, similarly to punctuation. What makes them different from punctuation is that they can be substituted by normal words. This involves all currency symbols, e.g. $ 75 is identical to 七十五 圓.
+
+Mathematical operators form another group of symbols.
+
+Another group of symbols is emoticons and emoji.
+
+Examples
+＄, ％, §, ©
++, −, ×, ÷, =, <, >
+:), ^_^, 😝
+john.doe@universal.org, http://universaldependencies.org/, 1-800-COMPANY
+
+
+VERB: A verb is a member of the syntactic class of words that typically signal events and actions, can constitute a minimal predicate in a clause, and govern the number and types of other constituents which may occur in the clause. Typically, A verb can be pre-modified by the negator 不 except that those can be pre-modified by degree modifier like 好 “very” are classified as ADJ.
+
+Despite its use in copular constructions, 是 is tagged as a verb due to its other non-copular meanings and functions.
+
+Examples: 游泳, 聽, 呼吸, 喜歡, 決定, 有, 是
+
+
+X: The tag X is used for words that for some reason cannot be assigned a real part-of-speech category. It should be used very restrictively.
+
+A special usage of X is for cases of code-switching where it is not possible (or meaningful) to analyze the intervening language grammatically (and where the dependency relation foreign is typically used in the syntactic analysis). This usage does not extend to ordinary loan words which should be assigned a normal part-of-speech.
+
+Example
+佢 突然 說 ：「 lkjwe/X 」
