@@ -298,7 +298,7 @@ if __name__ == "__main__":
 
     if args.dataset == 'cc100_yue':
         test_samples = load_dataset("indiejoseph/cc100-yue")['train']
-        test_samples = [sample['text'] for sample in test_samples if len(sample['text']) <= 100]
+        test_samples = [sample['text'] for sample in test_samples if (len(sample['text']) <= 100 and '嘅發音' not in sample['text'] and 'Hotels.com' not in sample['text'])]
     elif args.dataset == 'lihkg':
         test_samples = load_dataset("raptorkwok/cantonese_sentences")['train']
         test_samples.shuffle(seed=42)
