@@ -164,24 +164,31 @@ class LanguageModel:
 
 
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, embedding_dim, network_type):
+    def __init__(self, vocab, tagset, embedding_dim, network_type, network_depth, kernel_sizes):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
         self.embedding = nn.Embedding(len(vocab), embedding_dim)
+
+        self.network_depth = network_depth
+
+        # feature_dims = [128, 256, 512]
+        feature_dims = [64, 128, 256]
         
-        if network_type.startswith('cnn'):
-            self.conv1 = nn.Conv1d(embedding_dim, 128, kernel_size=3, padding=1)
-            self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=1)
-            self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=1)
-        elif network_type.startswith('dilated_cnn'):
-            self.conv1 = nn.Conv1d(embedding_dim, 128, kernel_size=3, padding=1)
-            self.conv2 = nn.Conv1d(128, 256, kernel_size=3, padding=2, dilation=2)
-            self.conv3 = nn.Conv1d(256, 512, kernel_size=3, padding=2, dilation=2)
+        self.conv1 = nn.ModuleList([
+            nn.Conv1d(embedding_dim, feature_dims[0], kernel_size=k, padding='same')
+            for k in kernel_sizes
+        ])
+
+        if 'cnn' in network_type:
+            if network_depth >= 2:
+                self.conv2 = nn.Conv1d(feature_dims[0] * len(kernel_sizes), feature_dims[1], kernel_size=3, padding='same', dilation=2 if 'dilated' in network_type else 1)
+            if network_depth >= 3:
+                self.conv3 = nn.Conv1d(feature_dims[1], feature_dims[2], kernel_size=3, padding='same', dilation=2 if 'dilated' in network_type else 1)
+
+        self.fc = nn.Linear(feature_dims[network_depth - 1], len(tagset))
         
-        self.fc = nn.Linear(512, len(tagset))
-        
-        self.use_crf = network_type.endswith('crf')
+        self.use_crf = 'crf' in network_type
         if self.use_crf:
             self.crf = CRF(len(tagset), batch_first=True)
         
@@ -192,9 +199,15 @@ class Tagger(nn.Module):
         # Transpose for 1D convolution
         x = embedded.transpose(1, 2)  # (batch_size, embedding_dim, sequence_length)
         
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
+        conv_outputs = []
+        for conv in self.conv1:
+            conv_output = F.relu(conv(x))
+            conv_outputs.append(conv_output)
+        x = torch.cat(conv_outputs, dim=1)
+        if self.network_depth >= 2:
+            x = F.relu(self.conv2(x))
+        if self.network_depth >= 3:
+            x = F.relu(self.conv3(x))
         
         # Transpose back
         x = x.transpose(1, 2)  # (batch_size, sequence_length, 512)
@@ -698,11 +711,11 @@ def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, dev
     print(f"Token Recall: {results['token_r']}")
 
 
-def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, device, load_weights=False):
+def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, kernel_sizes, device, load_weights=False):
     if sliding:
         model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
     else:
-        model = Tagger(vocab, tagset, embedding_dim, network_type).to(device)
+        model = Tagger(vocab, tagset, embedding_dim, network_type, network_depth, kernel_sizes).to(device)
     
     if load_weights:
         model.load_state_dict(torch.load(f"models/{model_name}.pth", weights_only=False).state_dict())
@@ -728,13 +741,14 @@ if __name__ == "__main__":
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
     parser.add_argument('--network_type', choices=['mlp', 'cnn', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf'], default='mlp', help='Type of the tagger neural network')
+    parser.add_argument('--kernel_sizes', nargs='+', type=int, default=[3], help='Kernel sizes for the CNN')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--segmentation_only', action='store_true', help='Whether to only segment the text')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{'_'.join(map(str, args.kernel_sizes))}' if args.kernel_sizes != [3] else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     training_dataset = []
     for dataset in args.training_dataset:
@@ -780,7 +794,8 @@ if __name__ == "__main__":
                        window_size=args.window_size, tag_context_size=args.tag_context_size,
                        embedding_type=args.embedding_type, embedding_dim=args.embedding_dim,
                        autoregressive_scheme=args.autoregressive_scheme,
-                       network_type=args.network_type, network_depth=args.network_depth, device=device,
+                       network_type=args.network_type, network_depth=args.network_depth,
+                       kernel_sizes=args.kernel_sizes, device=device,
                        load_weights=args.mode in ['test', 'infer'])
 
     if args.mode == 'train':
