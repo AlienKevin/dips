@@ -521,7 +521,7 @@ def train_sliding_model(model, model_name, train_loader, validation_loader, opti
         print(f"Epoch {epoch + 1}/{num_epochs} completed")
 
 
-def load_helper(dataset):
+def load_helper(dataset, tagging_scheme):
     label_names = dataset.features["pos_tags_ud"].feature.names
     id2label = { i:k for i, k in enumerate(label_names) }
 
@@ -532,10 +532,17 @@ def load_helper(dataset):
         char_tokens = []
         char_tags = []
         for token, tag in zip(tokens, tags):
+            if tagging_scheme == 'BIES' and len(token) == 1:
+                char_tokens.append(token)
+                char_tags.append(f"S-{tag}")
+                continue
+            
             for i, char in enumerate(token):
                 char_tokens.append(char)
                 if i == 0:
                     char_tags.append(f"B-{tag}")
+                elif tagging_scheme == 'BIES' and i == len(token) - 1:
+                    char_tags.append(f"E-{tag}")
                 else:
                     char_tags.append(f"I-{tag}")
         tagged_corpus.append((char_tokens, char_tags))
@@ -558,15 +565,15 @@ def load_ud(lang='yue',split='test'):
     return utterances
 
 
-def load_hkcancor():
+def load_hkcancor(tagging_scheme):
     dataset = load_dataset('nanyang-technological-university-singapore/hkcancor', split='train')
     dataset = dataset.map(lambda example: {
         'tokens': [normalize(token) for token in example['tokens']]
     })
-    return load_helper(dataset)
+    return load_helper(dataset, tagging_scheme)
 
 
-def load_tagged_dataset(dataset_name, split='train'):
+def load_tagged_dataset(dataset_name, split, tagging_scheme=None):
     dataset = load_dataset(f'AlienKevin/{dataset_name}-tagged', split=split)
     dataset = dataset.map(lambda example: {
         'tokens': [normalize(token) for token in example['tokens']]
@@ -581,7 +588,7 @@ def load_tagged_dataset(dataset_name, split='train'):
 
         return utterances
     else:
-        dataset = load_helper(dataset)
+        dataset = load_helper(dataset, tagging_scheme)
         return dataset
 
 
@@ -626,12 +633,12 @@ def merge_tokens(tagged_characters):
     current_tag = None
 
     for char, tag in tagged_characters:
-        if tag.startswith('B-'):
+        if tag.startswith('B-') or tag.startswith('S-'):
             if current_token:
                 merged_tokens.append((''.join(current_token), current_tag))
             current_token = [char]
             current_tag = tag[2:]
-        elif tag.startswith('I-'):
+        elif tag.startswith('I-') or tag.startswith('E-'):
             if current_tag is None:
                 print(f"Error: I-tag '{tag}' without preceding B-tag. Treating as B-tag.")
                 current_token = [char]
@@ -786,6 +793,7 @@ if __name__ == "__main__":
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
     parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg', 'wiki-yue-long', 'genius'], required=True, help='Training dataset(s) to use')
     parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
+    parser.add_argument('--tagging_scheme', choices=['BI', 'BIES'], default='BI', help='Tagging scheme to use')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
     parser.add_argument('--beam_size', type=int, default=None, help='Beam size for beam search')
     parser.add_argument('--window_size', type=int, default=5, help='Window size for the tagger')
@@ -800,20 +808,20 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{'_'.join(map(str, args.kernel_sizes))}' if args.kernel_sizes != [3] else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
+    model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_{args.tagging_scheme}' if args.tagging_scheme != 'BI' else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{'_'.join(map(str, args.kernel_sizes))}' if args.kernel_sizes != [3] else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
     training_dataset = []
     for dataset in args.training_dataset:
         if dataset == 'hkcancor':
-            training_dataset.extend(load_hkcancor())
+            training_dataset.extend(load_hkcancor(args.tagging_scheme))
         elif dataset == 'cc100':
-            training_dataset.extend(load_tagged_dataset('cc100-yue', 'train'))
+            training_dataset.extend(load_tagged_dataset('cc100-yue', 'train', args.tagging_scheme))
         elif dataset == 'lihkg':
-            training_dataset.extend(load_tagged_dataset('lihkg', 'train'))
+            training_dataset.extend(load_tagged_dataset('lihkg', 'train', args.tagging_scheme))
         elif dataset == 'wiki_yue_long':
-            training_dataset.extend(load_tagged_dataset('wiki_yue_long', 'train'))
+            training_dataset.extend(load_tagged_dataset('wiki_yue_long', 'train', args.tagging_scheme))
         elif dataset == 'genius':
-            training_dataset.extend(load_tagged_dataset('genius-zh-cn', 'train'))
+            training_dataset.extend(load_tagged_dataset('genius-zh-cn', 'train', args.tagging_scheme))
 
     random.seed(42)
     random.shuffle(training_dataset)
