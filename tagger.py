@@ -99,7 +99,8 @@ class TaggerDataset(IterableDataset):
 
     def __iter__(self):
         if self.sliding:
-            return self.prepare_windows()
+            for window in self.prepare_windows():
+                yield window
         else:
             for sentence, tags in self.data:
                 X = torch.tensor([self.vocab.get(char, self.vocab['[UNK]']) for char in sentence])
@@ -268,6 +269,9 @@ class SlidingTagger(nn.Module):
             self.embedding = nn.Embedding.from_pretrained(torch.eye(embedding_dim).to(torch.float), freeze=True)
         else:
             self.embedding = nn.Embedding(len(vocab), embedding_dim)
+        
+        self.embedding_dim = embedding_dim
+
         self.network_type = network_type
         if network_type == 'mlp':
             if network_depth == 3:
@@ -303,8 +307,23 @@ class SlidingTagger(nn.Module):
                 ]
 
             self.cnn = nn.Sequential(*layers)
+        elif network_type == 'mha':
+            num_heads = 8
+            
+            self.mha_layers = nn.ModuleList([nn.MultiheadAttention(embed_dim=self.embedding_dim, num_heads=num_heads) for _ in range(network_depth)])
+            self.positional_encoding = self.create_positional_encoding(max_len=window_size)
+            
+            self.fc = nn.Linear(self.embedding_dim, len(tagset))
         else:
             raise ValueError(f"Invalid network type: {network_type}")
+    
+    def create_positional_encoding(self, max_len):
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, self.embedding_dim, 2) * (-math.log(10000.0) / self.embedding_dim))
+        pe = torch.zeros(max_len, 1, self.embedding_dim)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        return pe
 
     def get_embedding(self, char):
         if char not in self.vocab:
@@ -339,17 +358,40 @@ class SlidingTagger(nn.Module):
 
                 assert(x.shape == (batch_size_x, embed_dim + extra_dim, seq_len))
             return self.cnn(x)
-
+        elif self.network_type == 'mha':
+            # Transpose x to (seq_len, batch_size, embedding_dim)
+            x = x.transpose(0, 1)
+            
+            # Add positional encoding
+            x = x + self.positional_encoding[:x.size(0), :].to(x.device)
+            
+            # Apply multi-head attention layers
+            attn_output = x
+            for mha_layer in self.mha_layers:
+                attn_output, _ = mha_layer(attn_output, attn_output, attn_output)
+            
+            # Transpose back to (batch_size, seq_len, embedding_dim)
+            attn_output = attn_output.transpose(0, 1)
+            
+            # Get the middle character's output
+            middle_index = attn_output.size(1) // 2
+            middle_output = attn_output[:, middle_index, :]
+            
+            # Apply final linear layer to the middle character's output
+            return self.fc(middle_output)
 
     def decode(self, text, pos_lm, beam_size, device):
-        pad_tag_index = self.tagset['[PAD]']
-        pad_one_hot = torch.nn.functional.one_hot(torch.tensor(pad_tag_index), num_classes=len(self.tagset)).float()
-        previous_predictions = torch.stack([pad_one_hot] * self.tag_context_size)
+        if self.autoregressive_scheme:
+            pad_tag_index = self.tagset['[PAD]']
+            pad_one_hot = torch.nn.functional.one_hot(torch.tensor(pad_tag_index), num_classes=len(self.tagset)).float()
+            previous_predictions = torch.stack([pad_one_hot] * self.tag_context_size)
+        else:
+            previous_predictions = None
         if pos_lm is None:
             # Greedy decoding
             tag_ids = []
             for i in range(len(text)):
-                scores = self.get_scores(text, i, previous_predictions, device)
+                scores = self.get_scores(text, i, device, previous_predictions)
                 _, predicted_tag = torch.max(scores, dim=1)
                 tag_ids.append(predicted_tag.item())
                 if self.autoregressive_scheme:
@@ -364,7 +406,7 @@ class SlidingTagger(nn.Module):
             for i in range(len(text)):
                 new_beam = []
                 for score, tag_sequence, prev_preds in beam:
-                    scores = self.get_scores(text, i, prev_preds, device)
+                    scores = self.get_scores(text, i, device, prev_preds)
                     scores = torch.log_softmax(scores, dim=1).view(-1)
                     for tag, tag_score in enumerate(scores):
                         new_score = score + tag_score.item()
@@ -387,7 +429,7 @@ class SlidingTagger(nn.Module):
         all_tags = list(self.tagset.keys())
         return [all_tags[tag_id] for tag_id in tag_ids]
 
-    def get_scores(self, text, index, previous_predictions, device):
+    def get_scores(self, text, index, device, previous_predictions=None):
         start = max(0, index - self.window_size // 2)
         end = index + self.window_size // 2 + 1
         window = text[start:end]
@@ -398,8 +440,8 @@ class SlidingTagger(nn.Module):
             window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
         # Add batch dimension
         X = torch.tensor(window).unsqueeze(0).to(device)
-        previous_predictions = previous_predictions.unsqueeze(0).to(device)
         if self.autoregressive_scheme:
+            previous_predictions = previous_predictions.unsqueeze(0).to(device)
             return self(X, extra_logits=previous_predictions)
         else:
             return self(X)
@@ -800,7 +842,7 @@ if __name__ == "__main__":
     parser.add_argument('--autoregressive_scheme', default=None, choices=['teacher_forcing'])
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
-    parser.add_argument('--network_type', choices=['mlp', 'cnn', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf', 'bi-lstm'], default='mlp', help='Type of the tagger neural network')
+    parser.add_argument('--network_type', choices=['mlp', 'cnn', 'mha', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf', 'bi-lstm'], default='mlp', help='Type of the tagger neural network')
     parser.add_argument('--kernel_sizes', nargs='+', type=int, default=[3], help='Kernel sizes for the CNN')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--segmentation_only', action='store_true', help='Whether to only segment the text')
@@ -832,6 +874,16 @@ if __name__ == "__main__":
     validation_dataset = training_dataset[:100]
     train_dataset = training_dataset[100:]
 
+    def sliding_collate_fn(batch):
+        X, extra_logits, y = zip(*batch)
+        X = torch.stack(X)
+        y = torch.stack(y)
+        if extra_logits[0] is not None:
+            extra_logits = torch.stack(extra_logits)
+        else:
+            extra_logits = None
+        return X, extra_logits, y
+
     def collate_fn(batch):
         X = [item[0] for item in batch]
         y = [item[1] for item in batch]
@@ -840,13 +892,13 @@ if __name__ == "__main__":
         return X_padded, y_padded
 
     train_data = TaggerDataset(train_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, sliding=args.sliding)
-    train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else None)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else sliding_collate_fn)
 
     print('Training dataset vocab size:', len(train_data.vocab))
     print('Training dataset tagset size:', len(train_data.tagset))
 
     validation_data = TaggerDataset(validation_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset, sliding=args.sliding)
-    validation_loader = DataLoader(validation_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else None)
+    validation_loader = DataLoader(validation_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else sliding_collate_fn)
 
     pos_lm = None
     if args.use_pos_lm:
