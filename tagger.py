@@ -616,7 +616,7 @@ def load_hkcancor(tagging_scheme):
 
 
 def load_tagged_dataset(dataset_name, split, tagging_scheme=None):
-    dataset = load_dataset(f'AlienKevin/{dataset_name}-tagged', split=split)
+    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name != "ctb8" else "ctb8"}' , split=split)
     dataset = dataset.map(lambda example: {
         'tokens': [normalize(token) for token in example['tokens']]
     })
@@ -739,6 +739,8 @@ def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, dev
         test_dataset = load_tagged_dataset('lihkg', 'test')
     elif test_dataset == 'ud_zh_hk':
         test_dataset = load_ud('zh_hk', 'test')
+    elif test_dataset == 'ctb8':
+        test_dataset = load_tagged_dataset('ctb8', 'test')
 
     if segmentation_only:
         test_dataset = [[(token, 'X') for token, _ in utterance] for utterance in test_dataset]
@@ -833,7 +835,7 @@ if __name__ == "__main__":
     parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
-    parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg', 'wiki-yue-long', 'genius'], required=True, help='Training dataset(s) to use')
+    parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100', 'lihkg', 'wiki-yue-long', 'genius', 'ctb8'], required=True, help='Training dataset(s) to use')
     parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
     parser.add_argument('--tagging_scheme', choices=['BI', 'BIES'], default='BI', help='Tagging scheme to use')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
@@ -864,6 +866,8 @@ if __name__ == "__main__":
             training_dataset.extend(load_tagged_dataset('wiki_yue_long', 'train', args.tagging_scheme))
         elif dataset == 'genius':
             training_dataset.extend(load_tagged_dataset('genius-zh-cn', 'train', args.tagging_scheme))
+        elif dataset == 'ctb8':
+            training_dataset.extend(load_tagged_dataset('ctb8', 'train', args.tagging_scheme))
 
     random.seed(42)
     random.shuffle(training_dataset)
@@ -919,6 +923,8 @@ if __name__ == "__main__":
         test(model, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on UD ZH-HK')
         test(model, 'ud_zh_hk', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        print('Testing on CTB 8.0')
+        test(model, 'ctb8', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on LIHKG')
         test(model, 'lihkg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
