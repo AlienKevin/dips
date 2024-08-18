@@ -94,7 +94,7 @@ Examples
 
 DET: Determiners are words that modify nouns or noun phrases and express the reference of the noun phrase in context.
 
-Note that Chinese does not traditionally define determiners as a separate word class, but categorizes them as pronouns and/or adjectives. For this reason, in the UD framework some words in Cantonese may function as determiners and be tagged DET in one syntactic context (i.e., when modifying a noun), and as pronouns (tagged PRON) when behaving as a nominal or the head of a nominal phrase.
+Note that Chinese does not traditionally define determiners as a separate word class, but categorizes them as pronouns and/or adjectives. For this reason, in the UD framework some words in Chinese may function as determiners and be tagged DET in one syntactic context (i.e., when modifying a noun), and as pronouns (tagged PRON) when behaving as a nominal or the head of a nominal phrase.
 
 Examples
 Demonstrative determiners: 這, 這些, 此, 那, 那些, 該
@@ -194,7 +194,7 @@ Title marks: 《 》
 
 SCONJ: A subordinating conjunction is a conjunction that links constructions by making one of them a constituent of the other. The subordinating conjunction typically marks the incorporated constituent which has the status of a subordinate clause.
 
-Subordinating conjunctions in Cantonese include all markers of subordinate clauses, including conditional clauses, purpose clauses, etc.
+Subordinating conjunctions in Chinese include all markers of subordinate clauses, including conditional clauses, purpose clauses, etc.
 
 In paired clauses where both clauses are marked by a conjunctive word and the first is subordinate to the second, we treat the conjunctive word in the first clause as SCONJ, whereas the one in the second, main clause as an adverb (ADV) (e.g., 雖然/SCONJ… 可是/ADV…).
 
