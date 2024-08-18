@@ -6,4 +6,5 @@ wandb/
 deepseek_api_key.txt
 errors.jsonl
 models/
+ctb8.0/
 __pycache__/
