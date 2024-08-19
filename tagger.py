@@ -231,7 +231,7 @@ class Tagger(nn.Module):
             
             self.fc = nn.Linear(feature_dims[network_depth - 1], len(tagset))
         elif 'bi-lstm' in network_type:
-            self.lstm = nn.LSTM(embedding_dim, 100, num_layers=network_depth, bidirectional=True, batch_first=True, dropout=0.2)
+            self.lstm = nn.LSTM(embedding_dim * (2 if 'bigram' in network_type else 1), 100, num_layers=network_depth, bidirectional=True, batch_first=True, dropout=0.2)
             # Double the feature dimension because it's bidirectional
             self.fc = nn.Linear(100 * 2, len(tagset))
         elif network_type == 'mha':
@@ -247,7 +247,16 @@ class Tagger(nn.Module):
     def forward(self, x, tags=None):
         # x shape: (batch_size, sequence_length)
         embedded = self.embedding(x)  # (batch_size, sequence_length, embedding_dim)
-
+        
+        if 'bigram' in self.network_type:
+            # Pad the end of embedded with an extra [PAD] token
+            pad_token = self.embedding(torch.tensor([self.vocab['[PAD]']]).to(embedded.device))
+            padded_embedded = torch.cat([embedded, pad_token.expand(embedded.size(0), 1, -1)], dim=1)
+            bigrams = torch.cat([padded_embedded[:, :-1], padded_embedded[:, 1:]], dim=2)
+            # Take the average of the bigram embeddings
+            bigrams = (bigrams[:, :, :embedded.size(2)] + bigrams[:, :, embedded.size(2):]) / 2
+            embedded = torch.cat([embedded, bigrams], dim=2)
+        
         if 'cnn' in self.network_type:
             # Transpose for 1D convolution
             x = embedded.transpose(1, 2)  # (batch_size, embedding_dim, sequence_length)
@@ -890,7 +899,7 @@ if __name__ == "__main__":
     parser.add_argument('--autoregressive_scheme', default=None, choices=['teacher_forcing'])
     parser.add_argument('--tag_context_size', type=int, default=0, help='Tag context size for the tagger')
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
-    parser.add_argument('--network_type', choices=['mlp', 'cnn', 'mha', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf', 'bi-lstm'], default='mlp', help='Type of the tagger neural network')
+    parser.add_argument('--network_type', choices=['mlp', 'cnn', 'mha', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf', 'bi-lstm', 'bi-lstm-bigram'], default='mlp', help='Type of the tagger neural network')
     parser.add_argument('--kernel_sizes', nargs='+', type=int, default=[3], help='Kernel sizes for the CNN')
     parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs to train')
     parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate for the optimizer')
