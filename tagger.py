@@ -975,6 +975,12 @@ if __name__ == "__main__":
         if args.segmentation_only:
             print('Testing on MSR')
             test(model, 'msr-seg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+            print('Testing on CityU')
+            test(model, 'cityu-seg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+            print('Testing on AS')
+            test(model, 'as-seg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+            print('Testing on PKU')
+            test(model, 'pku-seg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on LIHKG')
         test(model, 'lihkg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
