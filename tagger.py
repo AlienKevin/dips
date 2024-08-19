@@ -164,12 +164,43 @@ class LanguageModel:
             return 1 / len(self.vocab)  # Handle case where ngram is not in model
 
 
+def read_pretrained_embeddings(embedding_path, vocab):
+    word_to_embed = {}
+    unknown_embeds = []
+    with open(embedding_path, "r", encoding="utf-8") as f:
+        for line in f:
+            split = line.split(' ')
+            if len(split) > 2:
+                word = split[0]
+                vec = torch.tensor([float(x) for x in split[1:]])
+                if word in vocab:
+                    word_to_embed[word] = vec
+                else:
+                    unknown_embeds.append(vec)
+    
+    embedding_dim = next(iter(word_to_embed.values())).size(0)
+    out = torch.empty(len(vocab), embedding_dim)
+    nn.init.uniform_(out, -0.8, 0.8)
+    
+    for word, embed in word_to_embed.items():
+        out[vocab[word]] = embed
+    
+    if unknown_embeds:
+        unk_embed = torch.stack(unknown_embeds).mean(dim=0)
+        out[vocab['[UNK]']] = unk_embed
+    
+    return nn.Embedding.from_pretrained(out, freeze=True)
+
+
 class Tagger(nn.Module):
-    def __init__(self, vocab, tagset, embedding_dim, network_type, network_depth, kernel_sizes):
+    def __init__(self, vocab, tagset, embedding_dim, embedding_path, network_type, network_depth, kernel_sizes):
         super(Tagger, self).__init__()
         self.vocab = vocab
         self.tagset = tagset
-        self.embedding = nn.Embedding(len(vocab), embedding_dim)
+        if embedding_path is None:
+            self.embedding = nn.Embedding(len(vocab), embedding_dim)
+        else:
+            self.embedding = read_pretrained_embeddings(embedding_path, vocab)
 
         self.network_type = network_type
         self.network_depth = network_depth
@@ -779,11 +810,11 @@ def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, dev
     print(f"Token Recall: {results['token_r']}")
 
 
-def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth, kernel_sizes, device, load_weights=False):
+def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size, embedding_type, embedding_dim, embedding_path, autoregressive_scheme, network_type, network_depth, kernel_sizes, device, load_weights=False):
     if sliding:
         model = SlidingTagger(vocab, tagset, window_size, tag_context_size, embedding_type, embedding_dim, autoregressive_scheme, network_type, network_depth).to(device)
     else:
-        model = Tagger(vocab, tagset, embedding_dim, network_type, network_depth, kernel_sizes).to(device)
+        model = Tagger(vocab, tagset, embedding_dim, embedding_path, network_type, network_depth, kernel_sizes).to(device)
     
     if load_weights:
         model.load_state_dict(torch.load(f"models/{model_name}.pth", weights_only=False).state_dict())
@@ -831,6 +862,7 @@ if __name__ == "__main__":
     parser.add_argument('--text', type=str, default=None, help='Text to infer')
     parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
+    parser.add_argument('--embedding_path', default=None, help='Path to the character embedding file')
     parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
     parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100-yue', 'lihkg', 'wiki-yue-long', 'genius', 'ctb8'], required=True, help='Training dataset(s) to use')
     parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
@@ -899,7 +931,7 @@ if __name__ == "__main__":
 
     model = load_model(model_name, train_data.vocab, train_data.tagset, sliding=args.sliding,
                        window_size=args.window_size, tag_context_size=args.tag_context_size,
-                       embedding_type=args.embedding_type, embedding_dim=args.embedding_dim,
+                       embedding_type=args.embedding_type, embedding_dim=args.embedding_dim, embedding_path=args.embedding_path,
                        autoregressive_scheme=args.autoregressive_scheme,
                        network_type=args.network_type, network_depth=args.network_depth,
                        kernel_sizes=args.kernel_sizes, device=device,
