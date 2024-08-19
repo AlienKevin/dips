@@ -665,7 +665,7 @@ def train(model_name, model, train_loader, validation_loader, num_epochs, learni
     torch.save(model, f"models/{model_name}.pth")
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=len(train_loader), gamma=learning_rate_decay)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=learning_rate_decay)
 
     if sliding:
         train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, scheduler, num_epochs=num_epochs, device=device)
