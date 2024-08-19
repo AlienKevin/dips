@@ -190,9 +190,9 @@ class Tagger(nn.Module):
             
             self.fc = nn.Linear(feature_dims[network_depth - 1], len(tagset))
         elif 'bi-lstm' in network_type:
-            self.lstm = nn.LSTM(embedding_dim, feature_dims[0], num_layers=network_depth, bidirectional=True, batch_first=True)
+            self.lstm = nn.LSTM(embedding_dim, 100, num_layers=network_depth, bidirectional=True, batch_first=True, dropout=0.2)
             # Double the feature dimension because it's bidirectional
-            self.fc = nn.Linear(feature_dims[0] * 2, len(tagset))
+            self.fc = nn.Linear(100 * 2, len(tagset))
         
         self.use_crf = 'crf' in network_type
         if self.use_crf:
@@ -458,7 +458,7 @@ class SlidingTagger(nn.Module):
         return [(text[i], tag) for i, tag in enumerate(tags)]
 
 
-def train_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
+def train_model(model, model_name, train_loader, validation_loader, optimizer, scheduler, num_epochs, device, training_log_steps=10, validation_steps=0.1):
     best_loss = float('inf')
     step = 0
 
@@ -508,9 +508,11 @@ def train_model(model, model_name, train_loader, validation_loader, optimizer, n
                     torch.save(model, f"models/{model_name}.pth")
                 
                 model.train()
+        
+        scheduler.step()
 
 
-def train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs, device, training_log_steps=10, validation_steps=0.1):
+def train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, scheduler, num_epochs, device, training_log_steps=10, validation_steps=0.1):
     best_loss = float('inf')
     step = 0
     criterion = nn.CrossEntropyLoss()
@@ -560,6 +562,8 @@ def train_sliding_model(model, model_name, train_loader, validation_loader, opti
                 
                 model.train()
         
+        scheduler.step()
+
         print(f"Epoch {epoch + 1}/{num_epochs} completed")
 
 
@@ -634,15 +638,16 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None):
         return dataset
 
 
-def train(model_name, model, train_loader, validation_loader, sliding, device):
+def train(model_name, model, train_loader, validation_loader, num_epochs, learning_rate, learning_rate_decay, sliding, device):
     torch.save(model, f"models/{model_name}.pth")
 
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=len(train_loader), gamma=learning_rate_decay)
 
     if sliding:
-        train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs=5, device=device)
+        train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, scheduler, num_epochs=num_epochs, device=device)
     else:
-        train_model(model, model_name, train_loader, validation_loader, optimizer, num_epochs=5, device=device)
+        train_model(model, model_name, train_loader, validation_loader, optimizer, scheduler, num_epochs=num_epochs, device=device)
 
 
 def upos_id_to_str(upos_id):
@@ -846,6 +851,9 @@ if __name__ == "__main__":
     parser.add_argument('--network_depth', type=int, default=1, help='Depth of the tagger neural network')
     parser.add_argument('--network_type', choices=['mlp', 'cnn', 'mha', 'dilated_cnn', 'cnn_crf', 'dilated_cnn_crf', 'bi-lstm'], default='mlp', help='Type of the tagger neural network')
     parser.add_argument('--kernel_sizes', nargs='+', type=int, default=[3], help='Kernel sizes for the CNN')
+    parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs to train')
+    parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate for the optimizer')
+    parser.add_argument('--learning_rate_decay', type=float, default=0.0, help='Learning rate decay for the optimizer')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
     parser.add_argument('--segmentation_only', action='store_true', help='Whether to only segment the text')
     args = parser.parse_args()
@@ -917,7 +925,7 @@ if __name__ == "__main__":
                        load_weights=args.mode in ['test', 'infer'])
 
     if args.mode == 'train':
-        train(model_name, model, train_loader, validation_loader, args.sliding, device)
+        train(model_name, model, train_loader, validation_loader, args.num_epochs, args.learning_rate, args.learning_rate_decay, args.sliding, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
         test(model, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
