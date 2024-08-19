@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, IterableDataset
 from datasets import load_dataset
+import datasets
 import random
 from tqdm import tqdm
 import math
@@ -643,7 +644,17 @@ def load_ud(lang='yue',split='test'):
 
 
 def load_tagged_dataset(dataset_name, split, tagging_scheme=None):
-    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name != "ctb8" else "ctb8"}' , split=split)
+    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg"] else dataset_name}' , split=split)
+
+    if dataset_name.endswith('-seg'):
+        dataset = dataset.map(lambda example: {
+            'tokens': example['tokens'],
+            'pos_tags_ud': ['X' for _ in example['tokens']]
+        }, features=datasets.Features({
+            'tokens': datasets.Sequence(datasets.features.Value('string')),
+            'pos_tags_ud': datasets.Sequence(datasets.features.ClassLabel(names=['X']))
+        }))
+
     dataset = dataset.map(lambda example: {
         'tokens': [normalize(token) for token in example['tokens']]
     })
@@ -759,16 +770,10 @@ def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, dev
     from spacy.vocab import Vocab
     import json
 
-    if test_dataset == 'ud_yue':
-        test_dataset = load_ud('yue_hk', 'test')
-    elif test_dataset == 'cc100':
-        test_dataset = load_tagged_dataset('cc100-yue', 'test')
-    elif test_dataset == 'lihkg':
-        test_dataset = load_tagged_dataset('lihkg', 'test')
-    elif test_dataset == 'ud_zh_hk':
-        test_dataset = load_ud('zh_hk', 'test')
-    elif test_dataset == 'ctb8':
-        test_dataset = load_tagged_dataset('ctb8', 'test')
+    if test_dataset.startswith('ud_'):
+        test_dataset = load_ud(test_dataset.removeprefix('ud_'), 'test')
+    else:
+        test_dataset = load_tagged_dataset(test_dataset, 'test')
 
     if segmentation_only:
         test_dataset = [[(token, 'X') for token, _ in utterance] for utterance in test_dataset]
@@ -863,8 +868,8 @@ if __name__ == "__main__":
     parser.add_argument('--embedding_type', choices=['one_hot', 'learnable'], help='Embedding type to use')
     parser.add_argument('--embedding_dim', type=int, default=100, help='Embedding dimension to use')
     parser.add_argument('--embedding_path', default=None, help='Path to the character embedding file')
-    parser.add_argument('--vocab_threshold', type=float, default=0.999, help='Vocabulary threshold')
-    parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100-yue', 'lihkg', 'wiki-yue-long', 'genius', 'ctb8'], required=True, help='Training dataset(s) to use')
+    parser.add_argument('--vocab_threshold', type=float, default=0.9999, help='Vocabulary threshold')
+    parser.add_argument('--training_dataset', nargs='+', choices=['hkcancor', 'cc100-yue', 'lihkg', 'wiki-yue-long', 'genius', 'ctb8', 'msr-seg', 'as-seg', 'cityu-seg', 'pku-seg'], required=True, help='Training dataset(s) to use')
     parser.add_argument('--sliding', action='store_true', help='Whether to use sliding window')
     parser.add_argument('--tagging_scheme', choices=['BI', 'BIES'], default='BI', help='Tagging scheme to use')
     parser.add_argument('--use_pos_lm', action='store_true', help='Whether to use POS LM during decoding')
@@ -941,15 +946,18 @@ if __name__ == "__main__":
         train(model_name, model, train_loader, validation_loader, args.num_epochs, args.learning_rate, args.learning_rate_decay, args.sliding, device)
     elif args.mode == 'test':
         print('Testing on UD Yue')
-        test(model, 'ud_yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model, 'ud_yue_hk', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on UD ZH-HK')
         test(model, 'ud_zh_hk', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CTB 8.0')
         test(model, 'ctb8', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        if args.segmentation_only:
+            print('Testing on MSR')
+            test(model, 'msr-seg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on LIHKG')
         test(model, 'lihkg', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
         print('Testing on CC100')
-        test(model, 'cc100', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
+        test(model, 'cc100-yue', sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, segmentation_only=args.segmentation_only, device=device)
     elif args.mode == 'infer':
         hypothesis = infer(model, args.text, sliding=args.sliding, pos_lm=pos_lm, beam_size=args.beam_size, device=device)
         formatted_hypothesis = ' '.join([f"{token}/{tag}" for token, tag in hypothesis])
