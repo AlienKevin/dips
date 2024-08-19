@@ -193,6 +193,15 @@ def read_pretrained_embeddings(embedding_path, vocab):
     return nn.Embedding.from_pretrained(out, freeze=True)
 
 
+def create_positional_encoding(d_model, max_len):
+    position = torch.arange(max_len).unsqueeze(1)
+    div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+    pe = torch.zeros(max_len, 1, d_model)
+    pe[:, 0, 0::2] = torch.sin(position * div_term)
+    pe[:, 0, 1::2] = torch.cos(position * div_term)
+    return pe
+
+
 class Tagger(nn.Module):
     def __init__(self, vocab, tagset, embedding_dim, embedding_path, network_type, network_depth, kernel_sizes):
         super(Tagger, self).__init__()
@@ -225,6 +234,11 @@ class Tagger(nn.Module):
             self.lstm = nn.LSTM(embedding_dim, 100, num_layers=network_depth, bidirectional=True, batch_first=True, dropout=0.2)
             # Double the feature dimension because it's bidirectional
             self.fc = nn.Linear(100 * 2, len(tagset))
+        elif network_type == 'mha':
+            encoder_layer = nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=2)
+            self.mha = nn.TransformerEncoder(encoder_layer, num_layers=network_depth)
+            self.fc = nn.Linear(embedding_dim, len(tagset))
+            self.positional_encoding = create_positional_encoding(d_model=embedding_dim, max_len=1000)
         
         self.use_crf = 'crf' in network_type
         if self.use_crf:
@@ -252,6 +266,12 @@ class Tagger(nn.Module):
             x = x.transpose(1, 2)  # (batch_size, sequence_length, 512)
         elif 'bi-lstm' in self.network_type:
             x, _ = self.lstm(embedded)
+        elif self.network_type == 'mha':
+            # Transpose x to (seq_len, batch_size, embedding_dim)
+            x = embedded.transpose(0, 1)
+            x = x + self.positional_encoding[:x.size(0)].to(x.device)
+            x = self.mha(x)
+            x = x.transpose(0, 1)
 
         # Apply fully connected layer to each time step
         emissions = self.fc(x)  # (batch_size, sequence_length, len(tagset))
@@ -343,19 +363,11 @@ class SlidingTagger(nn.Module):
             num_heads = 8
             
             self.mha_layers = nn.ModuleList([nn.MultiheadAttention(embed_dim=self.embedding_dim, num_heads=num_heads) for _ in range(network_depth)])
-            self.positional_encoding = self.create_positional_encoding(max_len=window_size)
+            self.positional_encoding = create_positional_encoding(d_model=self.embedding_dim, max_len=window_size)
             
             self.fc = nn.Linear(self.embedding_dim, len(tagset))
         else:
             raise ValueError(f"Invalid network type: {network_type}")
-    
-    def create_positional_encoding(self, max_len):
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, self.embedding_dim, 2) * (-math.log(10000.0) / self.embedding_dim))
-        pe = torch.zeros(max_len, 1, self.embedding_dim)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
-        return pe
 
     def get_embedding(self, char):
         if char not in self.vocab:
