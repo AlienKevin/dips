@@ -263,7 +263,7 @@ if __name__ == "__main__":
     args.add_argument('--selective_in_context', action='store_true')
     args = args.parse_args()
 
-    with open(f'prompt_v{args.prompt_version}_{args.prompt_language}.txt', 'r') as file:
+    with open(f'data/prompt_v{args.prompt_version}_{args.prompt_language}.txt', 'r') as file:
         prompt_prefix = file.read()
 
     if args.prompt_script == 'simplified':

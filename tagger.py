@@ -824,7 +824,7 @@ def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size
 
 # Read the STCharacters.txt file and create a mapping dictionary
 t2s = {}
-with open('STCharacters.txt', 'r', encoding='utf-8') as f:
+with open('data/STCharacters.txt', 'r', encoding='utf-8') as f:
     for line in f:
         parts = line.strip().split('\t')
         if len(parts) == 2:
