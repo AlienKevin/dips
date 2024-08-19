@@ -611,14 +611,6 @@ def load_ud(lang='yue',split='test'):
     return utterances
 
 
-def load_hkcancor(tagging_scheme):
-    dataset = load_dataset('nanyang-technological-university-singapore/hkcancor', split='train')
-    dataset = dataset.map(lambda example: {
-        'tokens': [normalize(token) for token in example['tokens']]
-    })
-    return load_helper(dataset, tagging_scheme)
-
-
 def load_tagged_dataset(dataset_name, split, tagging_scheme=None):
     dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name != "ctb8" else "ctb8"}' , split=split)
     dataset = dataset.map(lambda example: {
@@ -862,29 +854,18 @@ if __name__ == "__main__":
 
     model_name = f"pos_tagger_{'_'.join(args.training_dataset)}{f'_sliding' if args.sliding else ''}{f'_seg' if args.segmentation_only else ''}{f'_{args.tagging_scheme}' if args.tagging_scheme != 'BI' else ''}{f'_window_size_{args.window_size}' if (args.window_size != 5 and args.sliding) else ''}{f'_{args.embedding_type}' if args.embedding_type else ''}{f'_embedding_dim_{args.embedding_dim}' if args.embedding_dim != 100 else ''}{f'_{args.network_type}' if args.network_type != 'mlp' else ''}{f'_network_depth_{args.network_depth}' if args.network_depth > 1 else ''}{f'_{'_'.join(map(str, args.kernel_sizes))}' if args.kernel_sizes != [3] else ''}{f'_{args.autoregressive_scheme}_{args.tag_context_size}' if args.autoregressive_scheme else ''}"
 
-    training_dataset = []
+    train_dataset = []
+    validation_dataset = []
     for dataset in args.training_dataset:
-        if dataset == 'hkcancor':
-            training_dataset.extend(load_hkcancor(args.tagging_scheme))
-        elif dataset == 'cc100':
-            training_dataset.extend(load_tagged_dataset('cc100-yue', 'train', args.tagging_scheme))
-        elif dataset == 'lihkg':
-            training_dataset.extend(load_tagged_dataset('lihkg', 'train', args.tagging_scheme))
-        elif dataset == 'wiki_yue_long':
-            training_dataset.extend(load_tagged_dataset('wiki_yue_long', 'train', args.tagging_scheme))
-        elif dataset == 'genius':
-            training_dataset.extend(load_tagged_dataset('genius-zh-cn', 'train', args.tagging_scheme))
-        elif dataset == 'ctb8':
-            training_dataset.extend(load_tagged_dataset('ctb8', 'train', args.tagging_scheme))
+        train_dataset.extend(load_tagged_dataset(dataset, 'train', args.tagging_scheme))
+        validation_dataset.extend(load_tagged_dataset(dataset, 'validation', args.tagging_scheme))
 
     random.seed(42)
-    random.shuffle(training_dataset)
+    random.shuffle(train_dataset)
 
     if args.segmentation_only:
-        training_dataset = [(tokens, [tag[:2] + 'X' for tag in tags]) for (tokens, tags) in training_dataset]
-
-    validation_dataset = training_dataset[:100]
-    train_dataset = training_dataset[100:]
+        train_dataset = [(tokens, [tag[:2] + 'X' for tag in tags]) for (tokens, tags) in train_dataset]
+        validation_dataset = [(tokens, [tag[:2] + 'X' for tag in tags]) for (tokens, tags) in validation_dataset]
 
     def sliding_collate_fn(batch):
         X, extra_logits, y = zip(*batch)
