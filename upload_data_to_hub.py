@@ -1,4 +1,4 @@
-from datasets import Dataset, DatasetDict
+from datasets import Dataset, DatasetDict, concatenate_datasets
 import datasets
 import json
 import argparse
@@ -81,8 +81,36 @@ features = datasets.Features(
 )
 filtered_data_dict = {key: [entry[key] for entry in filtered_data] for key in filtered_data[0]}
 dataset = Dataset.from_dict(filtered_data_dict, features=features)
-split_dataset = dataset.train_test_split(test_size=0.05)
-dataset_dict = DatasetDict({"train": split_dataset["train"], "test": split_dataset["test"]})
+
+# Calculate the percentage of sentence_preserved entries
+sentence_preserved_ratio = sum(dataset['sentence_preserved']) / len(dataset)
+
+# Calculate the test and validation sizes based on the total dataset
+test_size = 0.10
+validation_size = 0.10
+
+# Adjust the split ratios for sentence_preserved entries
+sentence_preserved_test_size = test_size / sentence_preserved_ratio
+sentence_preserved_validation_size = validation_size / sentence_preserved_ratio
+
+# Split the dataset based on sentence_preserved
+sentence_preserved = dataset.filter(lambda example: example['sentence_preserved'])
+not_sentence_preserved = dataset.filter(lambda example: not example['sentence_preserved'])
+
+# Split sentence_preserved data into train, validation, and test
+sentence_preserved_splits = sentence_preserved.train_test_split(test_size=sentence_preserved_test_size)
+sentence_preserved_train_val = sentence_preserved_splits['train'].train_test_split(test_size=sentence_preserved_validation_size / (1 - sentence_preserved_test_size))
+
+# Combine the splits
+dataset_dict = DatasetDict({
+    # Only use sentence_preserved entries for testing and validation
+    "train": concatenate_datasets([sentence_preserved_train_val['train'], not_sentence_preserved]),
+    "validation": sentence_preserved_train_val['test'],
+    "test": sentence_preserved_splits['test']
+})
+
+# Shuffle the training set
+dataset_dict['train'] = dataset_dict['train'].shuffle(seed=42)
 
 print(dataset_dict)
 
