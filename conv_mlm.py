@@ -206,7 +206,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
-    parser.add_argument('--dataset', type=str, choices=['rthk', 'genius'], required=True,
+    parser.add_argument('--dataset', type=str, choices=['rthk', 'genius', 'tte'], required=True,
                         help='Dataset to use for training')
     args = parser.parse_args()
 
