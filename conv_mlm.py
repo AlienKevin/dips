@@ -87,7 +87,7 @@ class MLMIterableDataset(IterableDataset):
             # Have to serialize to string because pyarrow doesn't support serialization of Counter
             return {"counter": json.dumps(dict(counter))}
         
-        counters = self.dataset.map(count_tokens, batched=False, num_proc=10)
+        counters = self.dataset.map(count_tokens, batched=False, num_proc=20)
         counter = Counter()
         for c in counters['counter']:
             counter.update(json.loads(c))
