@@ -70,10 +70,10 @@ def load_bpe_mappings(file_path):
 class MLMIterableDataset(IterableDataset):
     def __init__(self, dataset, field_name, vocab=None, mask_prob=0.05):
         self.dataset = dataset
+        self.field_name = field_name
         self.bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
         self.vocab = vocab if vocab else self.build_vocabulary()
         self.mask_prob = mask_prob
-        self.field_name = field_name
 
     def build_vocabulary(self):
         def count_tokens(item):
