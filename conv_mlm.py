@@ -68,10 +68,10 @@ def load_bpe_mappings(file_path):
     return bpe_mappings
 
 class MLMIterableDataset(IterableDataset):
-    def __init__(self, dataset, mask_prob=0.05):
+    def __init__(self, dataset, vocab=None, mask_prob=0.05):
         self.dataset = dataset
         self.bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
-        self.vocab = self.build_vocabulary()
+        self.vocab = vocab if vocab else self.build_vocabulary()
         self.mask_prob = mask_prob
 
     def build_vocabulary(self):
@@ -215,7 +215,7 @@ def main():
     train_dataset = MLMIterableDataset(train_dataset)
     train_dataloader = DataLoader(train_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
 
-    validation_dataset = MLMIterableDataset(validation_dataset)
+    validation_dataset = MLMIterableDataset(validation_dataset, vocab=train_dataset.vocab)
     validation_dataloader = DataLoader(validation_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]']))
 
     model = ConvMLM(train_dataset.vocab)
