@@ -68,16 +68,17 @@ def load_bpe_mappings(file_path):
     return bpe_mappings
 
 class MLMIterableDataset(IterableDataset):
-    def __init__(self, dataset, vocab=None, mask_prob=0.05):
+    def __init__(self, dataset, field_name, vocab=None, mask_prob=0.05):
         self.dataset = dataset
         self.bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
         self.vocab = vocab if vocab else self.build_vocabulary()
         self.mask_prob = mask_prob
+        self.field_name = field_name
 
     def build_vocabulary(self):
         def count_tokens(item):
             counter = Counter()
-            sentence = normalize(unicodedata.normalize('NFKC', item['content']))
+            sentence = normalize(unicodedata.normalize('NFKC', item[self.field_name]))
             for char in sentence:
                 if char in self.bpe_mappings:
                     counter.update(self.bpe_mappings[char])
@@ -108,7 +109,7 @@ class MLMIterableDataset(IterableDataset):
 
     def __iter__(self):
         for item in self.dataset:
-            sentence = item['content']
+            sentence = item[self.field_name]
             # Normalize to half-width
             sentence = normalize(unicodedata.normalize('NFKC', sentence))
             # Expand to BPE
@@ -212,9 +213,11 @@ def main():
     if args.dataset == 'rthk':
         dataset_author = 'jed351'
         dataset_name = 'rthk_news'
+        field_name = 'content'
     elif args.dataset == 'genius':
         dataset_author = 'beyond'
         dataset_name = 'chinese_clean_passages_80m'
+        field_name = 'passage'
     else:
         raise ValueError("Invalid dataset choice")
 
@@ -226,10 +229,10 @@ def main():
     validation_dataset = train_test_split['test']
 
     # Create dataset and dataloader
-    train_dataset = MLMIterableDataset(train_dataset)
+    train_dataset = MLMIterableDataset(train_dataset, field_name)
     train_dataloader = DataLoader(train_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
 
-    validation_dataset = MLMIterableDataset(validation_dataset, vocab=train_dataset.vocab)
+    validation_dataset = MLMIterableDataset(validation_dataset, field_name, vocab=train_dataset.vocab)
     validation_dataloader = DataLoader(validation_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]']))
 
     model = ConvMLM(train_dataset.vocab)
