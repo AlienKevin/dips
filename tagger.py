@@ -10,6 +10,7 @@ from tqdm import tqdm
 import math
 import wandb
 from crf import CRF
+from utils import normalize, pad_batch_seq
 
 
 class TaggerDataset(IterableDataset):
@@ -848,38 +849,6 @@ def load_model(model_name, vocab, tagset, sliding, window_size, tag_context_size
     return model.to(device)
 
 
-# Read the STCharacters.txt file and create a mapping dictionary
-t2s = {}
-with open('data/STCharacters.txt', 'r', encoding='utf-8') as f:
-    for line in f:
-        parts = line.strip().split('\t')
-        if len(parts) == 2:
-            simplified, traditional = parts
-            for char in traditional.split():
-                t2s[char] = simplified
-
-
-def normalize(text):
-    """
-    Simplify traditional Chinese text to simplified Chinese.
-
-    Args:
-        text (str): The input traditional Chinese text.
-
-    Returns:
-        str: The simplified Chinese text.
-
-    Example:
-        >>> normalize("漢字")
-        '汉字'
-        >>> normalize("這是一個測試")
-        '这是一个测试'
-        >>> normalize("Hello, 世界!")
-        'Hello, 世界!'
-    """
-    return ''.join(t2s.get(char, char) for char in text)
-
-
 if __name__ == "__main__":
     import argparse
 
@@ -935,21 +904,14 @@ if __name__ == "__main__":
             extra_logits = None
         return X, extra_logits, y
 
-    def collate_fn(batch):
-        X = [item[0] for item in batch]
-        y = [item[1] for item in batch]
-        X_padded = torch.nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=train_data.vocab['[PAD]'])
-        y_padded = torch.nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=train_data.tagset['[PAD]'])
-        return X_padded, y_padded
-
     train_data = TaggerDataset(train_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, sliding=args.sliding)
-    train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else sliding_collate_fn)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_data.vocab['[PAD]']) if not args.sliding else sliding_collate_fn(batch))
 
     print('Training dataset vocab size:', len(train_data.vocab))
     print('Training dataset tagset size:', len(train_data.tagset))
 
     validation_data = TaggerDataset(validation_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset, sliding=args.sliding)
-    validation_loader = DataLoader(validation_data, batch_size=args.batch_size, collate_fn=collate_fn if not args.sliding else sliding_collate_fn)
+    validation_loader = DataLoader(validation_data, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_data.vocab['[PAD]']) if not args.sliding else sliding_collate_fn)
 
     pos_lm = None
     if args.use_pos_lm:
