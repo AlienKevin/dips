@@ -229,7 +229,7 @@ def main():
     dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
 
     # Split the dataset into train and validation sets
-    train_test_split = dataset.train_test_split(test_size=0.05)
+    train_test_split = dataset.train_test_split(test_size=min(0.05*len(dataset), 10000))
     train_dataset = train_test_split['train']
     validation_dataset = train_test_split['test']
 
