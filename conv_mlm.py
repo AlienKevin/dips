@@ -68,8 +68,8 @@ def load_bpe_mappings(file_path):
     return bpe_mappings
 
 class MLMIterableDataset(IterableDataset):
-    def __init__(self, dataset_name, split, mask_prob=0.05):
-        self.dataset = load_dataset(dataset_name, split=split)
+    def __init__(self, dataset, mask_prob=0.05):
+        self.dataset = dataset
         self.bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
         self.vocab = self.build_vocabulary()
         self.mask_prob = mask_prob
@@ -205,11 +205,17 @@ def main():
     dataset_author = 'jed351'
     dataset_name = 'rthk_news'
 
+    dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
+    # Split the dataset into train and validation sets
+    train_test_split = dataset.train_test_split(test_size=0.05)
+    train_dataset = train_test_split['train']
+    validation_dataset = train_test_split['test']
+
     # Create dataset and dataloader
-    train_dataset = MLMIterableDataset(f'{dataset_author}/{dataset_name}', 'train')
+    train_dataset = MLMIterableDataset(train_dataset)
     train_dataloader = DataLoader(train_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
 
-    validation_dataset = MLMIterableDataset(f'{dataset_author}/{dataset_name}', 'validation')
+    validation_dataset = MLMIterableDataset(validation_dataset)
     validation_dataloader = DataLoader(validation_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]']))
 
     model = ConvMLM(train_dataset.vocab)
