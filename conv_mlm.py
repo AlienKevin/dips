@@ -209,6 +209,8 @@ def main():
     parser.add_argument('--dataset', type=str, choices=['rthk', 'genius', 'tte'], required=True,
                         help='Dataset to use for training')
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
+    parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
+    parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
     args = parser.parse_args()
 
     if args.dataset == 'rthk':
@@ -249,7 +251,7 @@ def main():
     criterion = nn.CrossEntropyLoss(ignore_index=train_dataset.vocab['[PAD]'])
 
     # Train the model
-    train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device=device)
+    train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device=device, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
 
 if __name__ == "__main__":
     main()
