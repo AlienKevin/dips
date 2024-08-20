@@ -208,6 +208,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
     parser.add_argument('--dataset', type=str, choices=['rthk', 'genius', 'tte'], required=True,
                         help='Dataset to use for training')
+    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
     args = parser.parse_args()
 
     if args.dataset == 'rthk':
@@ -234,10 +235,10 @@ def main():
 
     # Create dataset and dataloader
     train_dataset = MLMIterableDataset(train_dataset, field_name)
-    train_dataloader = DataLoader(train_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
 
     validation_dataset = MLMIterableDataset(validation_dataset, field_name, vocab=train_dataset.vocab)
-    validation_dataloader = DataLoader(validation_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]']))
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]']))
 
     model = ConvMLM(train_dataset.vocab)
     model.to(device)
