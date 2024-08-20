@@ -77,7 +77,7 @@ class MLMIterableDataset(IterableDataset):
     def build_vocabulary(self):
         def count_tokens(item):
             counter = Counter()
-            sentence = normalize(unicodedata.normalize('NFKC', ''.join(item['tokens'])))
+            sentence = normalize(unicodedata.normalize('NFKC', item['content']))
             for char in sentence:
                 if char in self.bpe_mappings:
                     counter.update(self.bpe_mappings[char])
@@ -108,7 +108,7 @@ class MLMIterableDataset(IterableDataset):
 
     def __iter__(self):
         for item in self.dataset:
-            sentence = ''.join(item['tokens'])
+            sentence = item['content']
             # Normalize to half-width
             sentence = normalize(unicodedata.normalize('NFKC', sentence))
             # Expand to BPE
@@ -202,13 +202,14 @@ def train(model, dataset_name, train_dataloader, validation_dataloader, optimize
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 
-    dataset_name = 'as-seg'
+    dataset_author = 'jed351'
+    dataset_name = 'rthk_news'
 
     # Create dataset and dataloader
-    train_dataset = MLMIterableDataset(f'AlienKevin/{dataset_name}', 'train')
+    train_dataset = MLMIterableDataset(f'{dataset_author}/{dataset_name}', 'train')
     train_dataloader = DataLoader(train_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
 
-    validation_dataset = MLMIterableDataset(f'AlienKevin/{dataset_name}', 'validation')
+    validation_dataset = MLMIterableDataset(f'{dataset_author}/{dataset_name}', 'validation')
     validation_dataloader = DataLoader(validation_dataset, batch_size=256, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]']))
 
     model = ConvMLM(train_dataset.vocab)
