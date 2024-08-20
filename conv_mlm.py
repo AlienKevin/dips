@@ -202,10 +202,24 @@ def train(model, dataset_name, train_dataloader, validation_dataloader, optimize
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 
-    dataset_author = 'jed351'
-    dataset_name = 'rthk_news'
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
+    parser.add_argument('--dataset', type=str, choices=['rthk', 'genius'], required=True,
+                        help='Dataset to use for training')
+    args = parser.parse_args()
+
+    if args.dataset == 'rthk':
+        dataset_author = 'jed351'
+        dataset_name = 'rthk_news'
+    elif args.dataset == 'genius':
+        dataset_author = 'beyond'
+        dataset_name = 'chinese_clean_passages_80m'
+    else:
+        raise ValueError("Invalid dataset choice")
 
     dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
+
     # Split the dataset into train and validation sets
     train_test_split = dataset.train_test_split(test_size=0.05)
     train_dataset = train_test_split['train']
