@@ -218,6 +218,10 @@ def main():
         dataset_author = 'beyond'
         dataset_name = 'chinese_clean_passages_80m'
         field_name = 'passage'
+    elif args.dataset == 'tte':
+        dataset_author = 'liswei'
+        dataset_name = 'Taiwan-Text-Excellence-2B'
+        field_name = 'text'
     else:
         raise ValueError("Invalid dataset choice")
 
