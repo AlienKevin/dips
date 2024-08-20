@@ -165,7 +165,7 @@ def validate(model, validation_dataloader, criterion, device):
 
 
 
-def train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, criterion, device, num_epochs=40, validation_steps=0.2):
+def train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device, num_epochs=40, validation_steps=0.2):
     model.train()
     best_val_loss = float('inf')
     global_step = 0
@@ -197,6 +197,7 @@ def train(model, dataset_name, train_dataloader, validation_dataloader, optimize
                 model.train()  # Set the model back to training mode
             
             global_step += 1
+        scheduler.step()
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
@@ -215,10 +216,11 @@ def main():
 
     # Training setup
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
     criterion = nn.CrossEntropyLoss(ignore_index=train_dataset.vocab['[PAD]'])
 
     # Train the model
-    train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, criterion, device=device)
+    train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device=device)
 
 if __name__ == "__main__":
     main()
