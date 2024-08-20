@@ -198,7 +198,7 @@ def train(model, dataset_name, train_dataloader, validation_dataloader, optimize
                 model.train()  # Set the model back to training mode
             
             global_step += 1
-        scheduler.step()
+            scheduler.step()
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
@@ -246,8 +246,13 @@ def main():
     model.to(device)
 
     # Training setup
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
+    optimizer = torch.optim.Adam(model.parameters())
+    total_steps = len(train_dataloader) * args.num_epochs
+    warmup_steps = int(0.1 * len(train_dataloader))  # 10% of first epoch
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1e-3, total_steps=total_steps,
+                                                    pct_start=warmup_steps/total_steps,
+                                                    anneal_strategy='linear', div_factor=25.0,
+                                                    final_div_factor=10000.0)
     criterion = nn.CrossEntropyLoss(ignore_index=train_dataset.vocab['[PAD]'])
 
     # Train the model
