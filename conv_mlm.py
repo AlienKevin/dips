@@ -211,6 +211,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
     parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
+    parser.add_argument('--max_sequence_length', type=int, default=200, help='Maximum sequence length')
     args = parser.parse_args()
 
     if args.dataset == 'rthk':
@@ -237,10 +238,10 @@ def main():
 
     # Create dataset and dataloader
     train_dataset = MLMIterableDataset(train_dataset, field_name)
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
 
     validation_dataset = MLMIterableDataset(validation_dataset, field_name, vocab=train_dataset.vocab)
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]']))
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
 
     model = ConvMLM(train_dataset.vocab)
     model.to(device)
