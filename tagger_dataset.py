@@ -136,10 +136,6 @@ def load_helper(dataset, tagging_scheme):
 def load_ud(lang='yue',split='test'):
     # Load the universal_dependencies dataset from Hugging Face
     dataset = load_dataset('universal-dependencies/universal_dependencies', lang, trust_remote_code=True)
-    
-    dataset = dataset.map(lambda example: {
-        'tokens': [normalize(token) for token in example['tokens']]
-    })
 
     # Gather all word segmented utterances
     utterances = [[(token, upos_id_to_str(pos)) for token, pos in zip(sentence['tokens'], sentence['upos'])] for sentence in dataset[split]]
@@ -163,7 +159,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
     tag_id2label = { i:k for i, k in enumerate(tab_label_names) }
 
     dataset = dataset.map(lambda example: {
-        'tokens': [normalize(token) for token in example['tokens']],
+        'tokens': example['tokens'],
         'tags': [tag_id2label[tag] for tag in example['pos_tags_ud']]
     })
     
@@ -207,10 +203,3 @@ def upos_id_to_str(upos_id):
         "AUX",
     ]
     return names[upos_id]
-
-def fix_tag(tag):
-    if tag == 'V':
-        return 'VERB'
-    elif tag == '[PAD]':
-        return 'NOUN'
-    return tag

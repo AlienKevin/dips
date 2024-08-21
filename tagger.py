@@ -6,10 +6,10 @@ from torch.utils.data import DataLoader
 import random
 from tqdm import tqdm
 import math
-from tagger_dataset import TaggerDataset, fix_tag, load_tagged_dataset, load_ud
+from tagger_dataset import TaggerDataset, load_tagged_dataset, load_ud
 import wandb
 from crf import CRF
-from utils import normalize, pad_batch_seq, merge_tokens
+from utils import normalize, pad_batch_seq, merge_tokens, score_tags
 
 class LanguageModel:
     def __init__(self, texts, vocab, ngrams):
@@ -198,6 +198,8 @@ class Tagger(nn.Module):
             return emissions
 
     def tag(self, text, device):
+        text = normalize(text)
+
         # Convert text to tensor of indices
         indices = torch.tensor([self.vocab.get(char, self.vocab['[UNK]']) for char in text], dtype=torch.long).unsqueeze(0).to(device)
         
@@ -546,10 +548,6 @@ def infer(model, text, sliding, pos_lm, beam_size, device):
 
 
 def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, device):
-    from spacy.training import Example
-    from spacy.scorer import Scorer
-    from spacy.tokens import Doc
-    from spacy.vocab import Vocab
     import json
 
     if test_dataset.startswith('ud_'):
@@ -567,25 +565,13 @@ def test(model, test_dataset, sliding, pos_lm, beam_size, segmentation_only, dev
 
     model.eval()
 
-    V = Vocab()
-    examples = []
-    errors = []
-    for reference in tqdm(test_dataset):
+    def tag_fn(text):
         if sliding:
-            hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device, pos_lm, beam_size))
+            return model.tag(text, device, pos_lm, beam_size)
         else:
-            hypothesis = merge_tokens(model.tag(''.join(token for token, _ in reference), device))
-        reference_tokens = [token for token, _ in reference]
-        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[fix_tag(tag) for _, tag in reference])
-        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[fix_tag(tag) for _, tag in hypothesis])
-        example = Example(predicted_doc, target)
-        examples.append(example)
+            return model.tag(text, device)
 
-        if reference != hypothesis:
-            errors.append({'reference': reference, 'hypothesis': hypothesis})
-
-    scorer = Scorer()
-    results = scorer.score(examples)
+    results, errors = score_tags(test_dataset, tag_fn)
 
     with open('errors.jsonl', 'w') as f:
         for error in errors:

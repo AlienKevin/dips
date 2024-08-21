@@ -109,3 +109,38 @@ def merge_tokens(tagged_characters, verbose=False):
         merged_tokens.append((''.join(current_token), current_tag))
 
     return merged_tokens
+
+
+def fix_tag(tag):
+    if tag == 'V':
+        return 'VERB'
+    elif tag == '[PAD]':
+        return 'X'
+    return tag
+
+
+def score_tags(test_dataset, tag):
+    from tqdm import tqdm
+    from spacy.training import Example
+    from spacy.scorer import Scorer
+    from spacy.tokens import Doc
+    from spacy.vocab import Vocab
+    
+    V = Vocab()
+    examples = []
+    errors = []
+    for reference in tqdm(test_dataset):
+        hypothesis = merge_tokens(tag(''.join(token for token, _ in reference)))
+        reference_tokens = [token for token, _ in reference]
+        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[fix_tag(tag) for _, tag in reference])
+        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[fix_tag(tag) for _, tag in hypothesis])
+        example = Example(predicted_doc, target)
+        examples.append(example)
+
+        if reference != hypothesis:
+            errors.append({'reference': reference, 'hypothesis': hypothesis})
+
+    scorer = Scorer()
+    results = scorer.score(examples)
+
+    return results, errors
