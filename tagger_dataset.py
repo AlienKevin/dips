@@ -162,20 +162,10 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
     tab_label_names = dataset.features["pos_tags_ud"].feature.names
     tag_id2label = { i:k for i, k in enumerate(tab_label_names) }
 
-    if transform:
-        def transform_fn(example):
-            [tokens, tags] = list(zip(*((transformed_token, transformed_tag) for token, tag in zip(example['tokens'], example['pos_tags_ud'])
-                                        for transformed_token, transformed_tag in transform(normalize(token), tag_id2label[tag]))))
-            return {
-                'tokens': tokens,
-                'tags': tags
-            }
-        dataset = dataset.map(transform_fn)
-    else:
-        dataset = dataset.map(lambda example: {
-            'tokens': [normalize(token) for token in example['tokens']],
-            'tags': [tag_id2label[tag] for tag in example['tags']]
-        })
+    dataset = dataset.map(lambda example: {
+        'tokens': [normalize(token) for token in example['tokens']],
+        'tags': [tag_id2label[tag] for tag in example['pos_tags_ud']]
+    })
     
     if split == 'test':
         utterances = []
@@ -185,8 +175,14 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
         return utterances
     else:
         dataset = load_helper(dataset, tagging_scheme)
+        if transform:
+            transformed_dataset = []
+            for chars, tags in dataset:
+                transformed_chars, transformed_tags = zip(*((transformed_token, transformed_tag) for token, tag in zip(chars, tags)
+                                    for transformed_token, transformed_tag in transform(normalize(token), tag)))
+                transformed_dataset.append((transformed_chars, transformed_tags))
+            dataset = transformed_dataset
         return dataset
-
 
 
 def upos_id_to_str(upos_id):
@@ -211,41 +207,6 @@ def upos_id_to_str(upos_id):
         "AUX",
     ]
     return names[upos_id]
-
-
-def merge_tokens(tagged_characters):
-    merged_tokens = []
-    current_token = []
-    current_tag = None
-
-    for char, tag in tagged_characters:
-        if tag.startswith('B-') or tag.startswith('S-'):
-            if current_token:
-                merged_tokens.append((''.join(current_token), current_tag))
-            current_token = [char]
-            current_tag = tag[2:]
-        elif tag.startswith('I-') or tag.startswith('E-'):
-            if current_tag is None:
-                print(f"Error: I-tag '{tag}' without preceding B-tag. Treating as B-tag.")
-                current_token = [char]
-                current_tag = tag[2:]
-            elif tag[2:] != current_tag:
-                print(f"Error: I-tag '{tag}' does not match current B-tag '{current_tag}'. Overwriting with B-tag.")
-                current_token.append(char)
-            else:
-                current_token.append(char)
-        else:
-            if current_token:
-                merged_tokens.append((''.join(current_token), current_tag))
-                current_token = []
-                current_tag = None
-            merged_tokens.append((char, tag))
-
-    if current_token:
-        merged_tokens.append((''.join(current_token), current_tag))
-
-    return merged_tokens
-
 
 def fix_tag(tag):
     if tag == 'V':

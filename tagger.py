@@ -6,10 +6,10 @@ from torch.utils.data import DataLoader
 import random
 from tqdm import tqdm
 import math
-from tagger_dataset import TaggerDataset, fix_tag, load_tagged_dataset, load_ud, merge_tokens
+from tagger_dataset import TaggerDataset, fix_tag, load_tagged_dataset, load_ud
 import wandb
 from crf import CRF
-from utils import normalize, pad_batch_seq
+from utils import normalize, pad_batch_seq, merge_tokens
 
 class LanguageModel:
     def __init__(self, texts, vocab, ngrams):

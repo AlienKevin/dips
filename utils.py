@@ -72,3 +72,40 @@ def pad_batch_seq(batch, padding_value, max_sequence_length=None):
     X_padded = torch.nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=padding_value)
     y_padded = torch.nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=padding_value)
     return X_padded, y_padded
+
+
+
+def merge_tokens(tagged_characters, verbose=False):
+    merged_tokens = []
+    current_token = []
+    current_tag = None
+
+    for char, tag in tagged_characters:
+        if tag.startswith('B-') or tag.startswith('S-'):
+            if current_token:
+                merged_tokens.append((''.join(current_token), current_tag))
+            current_token = [char]
+            current_tag = tag[2:]
+        elif tag.startswith('I-') or tag.startswith('E-'):
+            if current_tag is None:
+                if verbose:
+                    print(f"Error: I-tag '{tag}' without preceding B-tag. Treating as B-tag.")
+                current_token = [char]
+                current_tag = tag[2:]
+            elif tag[2:] != current_tag:
+                if verbose:
+                    print(f"Error: I-tag '{tag}' does not match current B-tag '{current_tag}'. Overwriting with B-tag.")
+                current_token.append(char)
+            else:
+                current_token.append(char)
+        else:
+            if current_token:
+                merged_tokens.append((''.join(current_token), current_tag))
+                current_token = []
+                current_tag = None
+            merged_tokens.append((char, tag))
+
+    if current_token:
+        merged_tokens.append((''.join(current_token), current_tag))
+
+    return merged_tokens

@@ -6,11 +6,36 @@ from collections import Counter
 import unicodedata
 import random
 from tagger_dataset import TaggerDataset, load_tagged_dataset
-from utils import normalize, pad_batch_seq
+from utils import normalize, pad_batch_seq, merge_tokens
 from tqdm import tqdm
 import json
 from vocab import Vocab
 import wandb
+
+
+# Load BPE mappings
+def load_bpe_mappings(file_path):
+    bpe_mappings = {}
+    code_to_index = {}
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            char, code = line.strip().split('\t')
+            codes = code.split(' ')
+            bpe_mappings[char] = codes
+            for code in codes:
+                if code not in code_to_index:
+                    code_to_index[code] = len(code_to_index)
+
+    # Map each individual code to the unicode codepoint at (0x4E00 + code_to_index[code]) in bpe_mappings
+    # i.e. replace cangjie code with the corresponding Chinese character
+    for char, codes in bpe_mappings.items():
+        bpe_mappings[char] = [chr(0x4E00 + code_to_index[code]) for code in codes]
+
+    return bpe_mappings
+
+
+bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
+
 
 class ConvMLM(nn.Module):
     def __init__(self, vocab, embedding_dim=100, hidden_dim=100, num_layers=4, tagset=None):
@@ -60,34 +85,46 @@ class ConvMLM(nn.Module):
                 'vocab': self.vocab.token2id_map
             }, path)
 
-    def load(self, path):
-        checkpoint = torch.load(path)
-        self.load_state_dict(checkpoint['state_dict'])
-        self.vocab = Vocab(checkpoint['vocab'])
-        self.tagset = checkpoint['tagset'] if checkpoint['tagset'] else None
+    @classmethod
+    def load(cls, path):
+        checkpoint = torch.load(path, weights_only=False)
+        vocab = Vocab(checkpoint['vocab'])
+        tagset = checkpoint.get('tagset')
+        model = cls(vocab, tagset=tagset)
+        model.load_state_dict(checkpoint['state_dict'])
+        return model
+    
+    def tag(self, text):
+        # Step 1: Normalize text and map Chinese characters to Cangjie codes
+        normalized_text = normalize(text)
+        mapped_text = []
+        token_map = {}
+        for i, char in enumerate(normalized_text):
+            if char in bpe_mappings:
+                cangjie_codes = bpe_mappings[char]
+                mapped_text.extend(cangjie_codes)
+            else:
+                mapped_text.append(char)
+            token_map[len(mapped_text) - 1] = i
 
+        # Step 2: Convert characters to input_ids
+        input_ids = [self.vocab[char] for char in mapped_text]
+        
+        # Step 3: Run the model and get top tag predictions
+        with torch.no_grad():
+            input_tensor = torch.tensor(input_ids).unsqueeze(0)  # Add batch dimension
+            output = self(input_tensor)
+            predictions = torch.argmax(output, dim=-1).squeeze(0)
 
-# Load BPE mappings
-def load_bpe_mappings(file_path):
-    bpe_mappings = {}
-    code_to_index = {}
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            char, code = line.strip().split('\t')
-            codes = code.split(' ')
-            bpe_mappings[char] = codes
-            for code in codes:
-                if code not in code_to_index:
-                    code_to_index[code] = len(code_to_index)
+        # Step 4: Map predicted tags back to the original text
+        tagged_text = []
+        for i, pred in enumerate(predictions):
+            if i in token_map:
+                char = text[token_map[i]]
+                tag = self.tagset.id2token(pred.item())
+                tagged_text.append((char, tag))
 
-    # Map each individual code to f'[{code_index}]' in bpe_mappings
-    for char, codes in bpe_mappings.items():
-        bpe_mappings[char] = [f'[{code_to_index[code]}]' for code in codes]
-
-    return bpe_mappings
-
-
-bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
+        return tagged_text
 
 
 class MLMIterableDataset(IterableDataset):
@@ -321,8 +358,14 @@ def train_model(args, device):
 
 
 def infer_model(args):
-    # TODO
-    pass
+    model = ConvMLM.load('models/conv_mlm.pth')
+
+    for text in args.texts:
+        tagged = merge_tokens(model.tag(text))
+        if args.segmentation:
+            print(' '.join(token for token, _ in tagged))
+        else:
+            print(tagged)
 
 
 def main():
@@ -334,6 +377,7 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer'], required=True, help='Mode to run in')
     parser.add_argument('--dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg'], required=True,
                         help='Dataset to use for training')
+    parser.add_argument('--texts', nargs='+')
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
     parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
@@ -344,7 +388,7 @@ def main():
     args = parser.parse_args()
 
     if args.mode == 'train':
-        train_model(args)
+        train_model(args, device)
     elif args.mode == 'infer':
         infer_model(args)
 
