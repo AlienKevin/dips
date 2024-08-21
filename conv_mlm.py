@@ -194,7 +194,7 @@ class MLMIterableDataset(IterableDataset):
             yield torch.tensor(masked_input_ids, dtype=torch.int64), torch.tensor(input_ids, dtype=torch.int64)
 
 
-def validate(model, validation_dataloader, criterion, mlm_loss, device):
+def validate(model, validation_dataset, validation_dataloader, criterion, mlm_loss, device):
     model.eval()
     total_loss = 0
     total_correct = 0
@@ -215,7 +215,7 @@ def validate(model, validation_dataloader, criterion, mlm_loss, device):
                 mask = labels != model.vocab['[PAD]'] 
                 # Don't need to apply mask here because criterion already ignores padding tokens
                 loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1))
-            
+
             total_loss += loss.item()
 
             # Calculate accuracy
@@ -227,11 +227,17 @@ def validate(model, validation_dataloader, criterion, mlm_loss, device):
     avg_loss = total_loss / len(validation_dataloader)
     accuracy = total_correct / total_tokens if total_tokens > 0 else 0
 
-    return avg_loss, accuracy
+    tag_measures = None
+    if not mlm_loss:
+        model.to('cpu')
+        tag_measures, tag_errors = score_tags(validation_dataset, lambda text: model.tag(text))
+        model.to(device)
+
+    return avg_loss, accuracy, tag_measures
 
 
 
-def train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device, mlm_loss=True, num_epochs=40, validation_steps=0.2):
+def train(model, dataset_name, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device, mlm_loss=True, num_epochs=40, validation_steps=0.2):
     model.train()
     best_val_loss = float('inf')
     global_step = 0
@@ -253,11 +259,21 @@ def train(model, dataset_name, train_dataloader, validation_dataloader, optimize
             wandb.log({"train_loss": loss.item()}, step=global_step)
 
             if global_step % round(validation_steps * len(train_dataloader)) == 0:
-                val_loss, val_accuracy = validate(model, validation_dataloader, criterion, mlm_loss, device)
-                wandb.log({
-                    "val_loss": val_loss,
-                    "val_accuracy": val_accuracy
-                }, step=global_step)
+                val_loss, val_accuracy, tag_measures = validate(model, validation_dataset, validation_dataloader, criterion, mlm_loss, device)
+                if tag_measures is None:
+                    wandb.log({
+                        "val_loss": val_loss,
+                        "val_accuracy": val_accuracy
+                    }, step=global_step)
+                else:
+                    wandb.log({
+                        "val_loss": val_loss,
+                        "val_acc": val_accuracy,
+                        "val_pos_acc": tag_measures['pos_acc'],
+                        "val_token_f1": tag_measures['token_f'],
+                        "val_token_p": tag_measures['token_p'],
+                        "val_token_r": tag_measures['token_r']
+                    }, step=global_step)
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
@@ -293,9 +309,9 @@ def load_train_dataset(args):
         dataset_author = 'liswei'
         dataset_name = 'Taiwan-Text-Excellence-2B'
         field_name = 'text'
-    elif args.train_dataset == 'cityu-seg':
+    elif args.train_dataset.endswith('-seg'):
         dataset_author = 'AlienKevin'
-        dataset_name = 'cityu-seg'
+        dataset_name = args.train_dataset
     else:
         raise ValueError("Invalid dataset choice")
 
@@ -333,6 +349,9 @@ def load_train_dataset(args):
         validation_dataset = TaggerDataset(validation_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, vocab=train_dataset.vocab, tagset=train_dataset.tagset, sliding=False)
         validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size,
                                            collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
+    
+        # Reload validation in the same format as the test dataset for calculating F1 score
+        validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme, output_format='test')
 
     return dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader
 
@@ -354,7 +373,7 @@ def train_model(args, device):
     criterion = nn.CrossEntropyLoss(ignore_index=train_dataset.vocab['[PAD]'])
 
     # Train the model
-    train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device=device, mlm_loss=not args.segmentation, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
+    train(model, dataset_name, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device=device, mlm_loss=not args.segmentation, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
 
 
 def test_model(args):
@@ -390,9 +409,9 @@ def main():
 
     parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg'],
                         help='Dataset to use for testing')
     parser.add_argument('--texts', nargs='+')
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')

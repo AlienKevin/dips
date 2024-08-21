@@ -143,7 +143,7 @@ def load_ud(lang='yue',split='test'):
     return utterances
 
 
-def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None):
+def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None, output_format='follow_split'):
     dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg"] else dataset_name}' , split=split)
 
     if dataset_name.endswith('-seg'):
@@ -163,7 +163,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
         'tags': [tag_id2label[tag] for tag in example['pos_tags_ud']]
     })
     
-    if split == 'test':
+    if split == 'test' or output_format == 'test':
         utterances = []
         for item in dataset:
             utterances.append([(token, tag) for token, tag in zip(item['tokens'], item['tags'])])
