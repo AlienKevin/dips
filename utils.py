@@ -11,7 +11,27 @@ with open('data/STCharacters.txt', 'r', encoding='utf-8') as f:
                 t2s[char] = simplified
 
 
-def normalize(text):
+def halfen(s):
+    '''
+    Convert full-width characters to ASCII counterpart
+
+    >>> halfen('１３')
+    '13'
+    >>> halfen('ＡａＺ')
+    'AaZ'
+    >>> halfen('（）【】“”「」！、，。：；')
+    '()[]""""!,,.:;'
+    '''
+    FULL2HALF = dict((i + 0xFEE0, i) for i in range(0x21, 0x7F))
+    FULL2HALF[0x3000] = 0x20
+    return str(s).translate(FULL2HALF).replace('，', ',').replace('。', '.') \
+        .replace('【', '[').replace('】', ']') \
+        .replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'") \
+        .replace('「', '"').replace('」', '"').replace('『', "'").replace('』', "'") \
+        .replace('、', ',')
+
+
+def simplify(text):
     """
     Simplify traditional Chinese text to simplified Chinese.
 
@@ -22,14 +42,24 @@ def normalize(text):
         str: The simplified Chinese text.
 
     Example:
-        >>> normalize("漢字")
+        >>> simplify("漢字")
         '汉字'
-        >>> normalize("這是一個測試")
+        >>> simplify("這是一個測試")
         '这是一个测试'
-        >>> normalize("Hello, 世界!")
+        >>> simplify("Hello, 世界!")
         'Hello, 世界!'
     """
     return ''.join(t2s.get(char, char) for char in text)
+
+
+def normalize(text):
+    """
+    Normalize text
+
+    >>> normalize('（１３，漢：；字。）！')
+    '(13,汉:;字.)!'
+    """
+    return halfen(simplify(text))
 
 
 def pad_batch_seq(batch, padding_value, max_sequence_length=None):

@@ -2,113 +2,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, IterableDataset
-from datasets import load_dataset
-import datasets
+from torch.utils.data import DataLoader
 import random
 from tqdm import tqdm
 import math
+from tagger_dataset import TaggerDataset, fix_tag, load_tagged_dataset, load_ud, merge_tokens
 import wandb
 from crf import CRF
 from utils import normalize, pad_batch_seq
-
-
-class TaggerDataset(IterableDataset):
-    def __init__(self, data, window_size, tag_context_size, vocab_threshold, sliding=True, vocab=None, tagset=None):
-        self.sliding = sliding
-        self.data = data
-        self.window_size = window_size
-        self.vocab_threshold = vocab_threshold
-        if vocab is None:
-            self.vocab = self.build_vocab()
-        else:
-            self.vocab = vocab
-        self.tag_context_size = tag_context_size
-        if tagset is None:
-            self.tagset = self.build_tagset()
-        else:
-            self.tagset = tagset
-        self.num_windows = self.calculate_num_windows()
-
-    def build_vocab(self):
-        from collections import Counter
-        vocab_counter = Counter()
-        for sentence, tags in self.data:
-            for char in sentence:
-                vocab_counter[char] += 1
-        total_chars = sum(vocab_counter.values())
-        sorted_vocab = sorted(vocab_counter.items(), key=lambda x: x[1], reverse=True)
-        cumulative_count = 0
-        vocab = {}
-        unk_count = 0
-        for char, count in sorted_vocab:
-            cumulative_count += count
-            if cumulative_count / total_chars > self.vocab_threshold:
-                unk_count += count
-                continue
-            vocab[char] = len(vocab)
-        if '[UNK]' not in vocab:
-            vocab['[UNK]'] = len(vocab)
-        vocab['[PAD]'] = len(vocab)
-        print(f"Number of characters classified as [UNK]: {unk_count}")
-        return vocab
-
-    def build_tagset(self):
-        tagset = set()
-        for sentence, tags in self.data:
-            for tag in tags:
-                tagset.add(tag)
-        if self.tag_context_size > 0 or not self.sliding:
-            tagset.add('[PAD]')
-        tagset = sorted(list(tagset))
-        tagset = {tag: idx for idx, tag in enumerate(tagset)}
-        return tagset
-
-    def calculate_num_windows(self):
-        num_windows = 0
-        for sentence, tags in self.data:
-            num_windows += len(sentence)
-        return num_windows
-
-    def prepare_windows(self):
-        for sentence, tags in self.data:
-            for i in range(len(sentence)):
-                start = max(0, i - self.window_size // 2)
-                end = i + self.window_size // 2 + 1
-                window = sentence[start:end]
-                window = [self.vocab.get(char, self.vocab['[UNK]']) for char in window]
-                if len(window) < self.window_size:
-                    pad_left = (self.window_size - len(window)) // 2
-                    pad_right = self.window_size - len(window) - pad_left
-                    window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
-                X = torch.tensor(window)
-                y = torch.tensor(self.tagset[tags[i]])
-                if self.tag_context_size > 0:
-                    context_tags = tags[max(0, i - self.tag_context_size):i]
-                    if len(context_tags) < self.tag_context_size:
-                        pad_size = self.tag_context_size - len(context_tags)
-                        context_tags = ['[PAD]'] * pad_size + context_tags
-                    tag_context = torch.nn.functional.one_hot(torch.tensor([self.tagset[tag] for tag in context_tags]), num_classes=len(self.tagset)).to(torch.float)
-                    yield (X, tag_context, y)
-                else:
-                    yield (X, None, y)
-
-    def __len__(self):
-        if self.sliding:
-            return self.num_windows
-        else:
-            return len(self.data)
-
-    def __iter__(self):
-        if self.sliding:
-            for window in self.prepare_windows():
-                yield window
-        else:
-            for sentence, tags in self.data:
-                X = torch.tensor([self.vocab.get(char, self.vocab['[UNK]']) for char in sentence])
-                y = torch.tensor([self.tagset[tag] for tag in tags])
-                yield (X, y)
-
 
 class LanguageModel:
     def __init__(self, texts, vocab, ngrams):
@@ -620,80 +521,6 @@ def train_sliding_model(model, model_name, train_loader, validation_loader, opti
 
         print(f"Epoch {epoch + 1}/{num_epochs} completed")
 
-
-def load_helper(dataset, tagging_scheme):
-    label_names = dataset.features["pos_tags_ud"].feature.names
-    id2label = { i:k for i, k in enumerate(label_names) }
-
-    tagged_corpus = []
-    for item in dataset:
-        tokens = item['tokens']
-        tags = [id2label[tag] for tag in item['pos_tags_ud']]
-        char_tokens = []
-        char_tags = []
-        for token, tag in zip(tokens, tags):
-            if tagging_scheme == 'BIES' and len(token) == 1:
-                char_tokens.append(token)
-                char_tags.append(f"S-{tag}")
-                continue
-            
-            for i, char in enumerate(token):
-                char_tokens.append(char)
-                if i == 0:
-                    char_tags.append(f"B-{tag}")
-                elif tagging_scheme == 'BIES' and i == len(token) - 1:
-                    char_tags.append(f"E-{tag}")
-                else:
-                    char_tags.append(f"I-{tag}")
-        tagged_corpus.append((char_tokens, char_tags))
-    return tagged_corpus
-
-
-def load_ud(lang='yue',split='test'):
-    from datasets import load_dataset
-
-    # Load the universal_dependencies dataset from Hugging Face
-    dataset = load_dataset('universal-dependencies/universal_dependencies', lang, trust_remote_code=True)
-    
-    dataset = dataset.map(lambda example: {
-        'tokens': [normalize(token) for token in example['tokens']]
-    })
-
-    # Gather all word segmented utterances
-    utterances = [[(token, upos_id_to_str(pos)) for token, pos in zip(sentence['tokens'], sentence['upos'])] for sentence in dataset[split]]
-
-    return utterances
-
-
-def load_tagged_dataset(dataset_name, split, tagging_scheme=None):
-    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg"] else dataset_name}' , split=split)
-
-    if dataset_name.endswith('-seg'):
-        dataset = dataset.map(lambda example: {
-            'tokens': example['tokens'],
-            'pos_tags_ud': ['X' for _ in example['tokens']]
-        }, features=datasets.Features({
-            'tokens': datasets.Sequence(datasets.features.Value('string')),
-            'pos_tags_ud': datasets.Sequence(datasets.features.ClassLabel(names=['X']))
-        }))
-
-    dataset = dataset.map(lambda example: {
-        'tokens': [normalize(token) for token in example['tokens']]
-    })
-    if split == 'test':
-        label_names = dataset.features["pos_tags_ud"].feature.names
-        id2label = { i:k for i, k in enumerate(label_names) }
-
-        utterances = []
-        for item in dataset:
-            utterances.append([(token, id2label[pos]) for token, pos in zip(item['tokens'], item['pos_tags_ud'])])
-
-        return utterances
-    else:
-        dataset = load_helper(dataset, tagging_scheme)
-        return dataset
-
-
 def train(model_name, model, train_loader, validation_loader, num_epochs, learning_rate, learning_rate_decay, sliding, device):
     torch.save(model, f"models/{model_name}.pth")
 
@@ -704,73 +531,6 @@ def train(model_name, model, train_loader, validation_loader, num_epochs, learni
         train_sliding_model(model, model_name, train_loader, validation_loader, optimizer, scheduler, num_epochs=num_epochs, device=device)
     else:
         train_model(model, model_name, train_loader, validation_loader, optimizer, scheduler, num_epochs=num_epochs, device=device)
-
-
-def upos_id_to_str(upos_id):
-    names=[
-        "NOUN",
-        "PUNCT",
-        "ADP",
-        "NUM",
-        "SYM",
-        "SCONJ",
-        "ADJ",
-        "PART",
-        "DET",
-        "CCONJ",
-        "PROPN",
-        "PRON",
-        "X",
-        "X",
-        "ADV",
-        "INTJ",
-        "VERB",
-        "AUX",
-    ]
-    return names[upos_id]
-
-
-def merge_tokens(tagged_characters):
-    merged_tokens = []
-    current_token = []
-    current_tag = None
-
-    for char, tag in tagged_characters:
-        if tag.startswith('B-') or tag.startswith('S-'):
-            if current_token:
-                merged_tokens.append((''.join(current_token), current_tag))
-            current_token = [char]
-            current_tag = tag[2:]
-        elif tag.startswith('I-') or tag.startswith('E-'):
-            if current_tag is None:
-                print(f"Error: I-tag '{tag}' without preceding B-tag. Treating as B-tag.")
-                current_token = [char]
-                current_tag = tag[2:]
-            elif tag[2:] != current_tag:
-                print(f"Error: I-tag '{tag}' does not match current B-tag '{current_tag}'. Overwriting with B-tag.")
-                current_token.append(char)
-            else:
-                current_token.append(char)
-        else:
-            if current_token:
-                merged_tokens.append((''.join(current_token), current_tag))
-                current_token = []
-                current_tag = None
-            merged_tokens.append((char, tag))
-
-    if current_token:
-        merged_tokens.append((''.join(current_token), current_tag))
-
-    return merged_tokens
-
-
-def fix_tag(tag):
-    if tag == 'V':
-        return 'VERB'
-    elif tag == '[PAD]':
-        return 'NOUN'
-    return tag
-
 
 def infer(model, text, sliding, pos_lm, beam_size, device):
     model.eval()
