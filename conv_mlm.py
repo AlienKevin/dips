@@ -6,7 +6,7 @@ from collections import Counter
 import unicodedata
 import random
 from tagger_dataset import TaggerDataset, load_tagged_dataset
-from utils import normalize, pad_batch_seq, merge_tokens
+from utils import normalize, pad_batch_seq, merge_tokens, score_tags
 from tqdm import tqdm
 import json
 from vocab import Vocab
@@ -280,26 +280,26 @@ def cangjie_expand(token, tag):
     return results
 
 
-def load_dataset(args):
-    if args.dataset == 'rthk':
+def load_train_dataset(args):
+    if args.train_dataset == 'rthk':
         dataset_author = 'jed351'
         dataset_name = 'rthk_news'
         field_name = 'content'
-    elif args.dataset == 'genius':
+    elif args.train_dataset == 'genius':
         dataset_author = 'beyond'
         dataset_name = 'chinese_clean_passages_80m'
         field_name = 'passage'
-    elif args.dataset == 'tte':
+    elif args.train_dataset == 'tte':
         dataset_author = 'liswei'
         dataset_name = 'Taiwan-Text-Excellence-2B'
         field_name = 'text'
-    elif args.dataset == 'cityu-seg':
+    elif args.train_dataset == 'cityu-seg':
         dataset_author = 'AlienKevin'
         dataset_name = 'cityu-seg'
     else:
         raise ValueError("Invalid dataset choice")
 
-    if args.dataset in ['rthk', 'tte', 'genius', 'tte']:
+    if args.train_dataset in ['rthk', 'tte', 'genius', 'tte']:
         dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
 
         # Split the dataset into train and validation sets
@@ -338,7 +338,7 @@ def load_dataset(args):
 
 
 def train_model(args, device):
-    dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_dataset(args)
+    dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
 
     model = ConvMLM(train_dataset.vocab, tagset=train_dataset.tagset)
     model.to(device)
@@ -355,6 +355,21 @@ def train_model(args, device):
 
     # Train the model
     train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device=device, mlm_loss=not args.segmentation, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
+
+
+def test_model(args):
+    test_dataset = load_tagged_dataset(args.test_dataset, 'test')
+    
+    model = ConvMLM.load('models/conv_mlm.pth')
+
+    results, errors = score_tags(test_dataset, lambda text: model.tag(text))
+
+    if not args.segmentation:
+        print(f"POS Tagging Accuracy: {results['pos_acc']}")
+    
+    print(f"Token F1 Score: {results['token_f']}")
+    print(f"Token Precision: {results['token_p']}")
+    print(f"Token Recall: {results['token_r']}")
 
 
 def infer_model(args):
@@ -374,9 +389,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
-    parser.add_argument('--mode', type=str, choices=['train', 'infer'], required=True, help='Mode to run in')
-    parser.add_argument('--dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg'], required=True,
+    parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg'],
                         help='Dataset to use for training')
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg'],
+                        help='Dataset to use for testing')
     parser.add_argument('--texts', nargs='+')
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
@@ -391,6 +408,8 @@ def main():
         train_model(args, device)
     elif args.mode == 'infer':
         infer_model(args)
+    elif args.mode == 'test':
+        test_model(args)
 
 if __name__ == "__main__":
     main()
