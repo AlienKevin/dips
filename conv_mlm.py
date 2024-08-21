@@ -379,7 +379,7 @@ def train_model(args, device):
 def test_model(args):
     test_dataset = load_tagged_dataset(args.test_dataset, 'test')
     
-    model = ConvMLM.load('models/conv_mlm.pth')
+    model = ConvMLM.load(f'models/conv_mlm_{args.train_dataset}.pth')
 
     results, errors = score_tags(test_dataset, lambda text: model.tag(text))
 
@@ -392,7 +392,7 @@ def test_model(args):
 
 
 def infer_model(args):
-    model = ConvMLM.load('models/conv_mlm.pth')
+    model = ConvMLM.load(f'models/conv_mlm_{args.train_dataset}.pth')
 
     for text in args.texts:
         tagged = merge_tokens(model.tag(text))
