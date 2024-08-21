@@ -5,18 +5,20 @@ from datasets import load_dataset
 from collections import Counter
 import unicodedata
 import random
+from tagger_dataset import TaggerDataset, load_tagged_dataset
 from utils import normalize, pad_batch_seq
 from tqdm import tqdm
 import json
+from vocab import Vocab
 import wandb
 
 class ConvMLM(nn.Module):
-    def __init__(self, vocab, embedding_dim=100, hidden_dim=100, num_layers=4):
+    def __init__(self, vocab, embedding_dim=100, hidden_dim=100, num_layers=4, tagset=None):
         super(ConvMLM, self).__init__()
         self.vocab = vocab
         self.embedding = nn.Embedding(len(vocab), embedding_dim)
-        self.vocab_inv = {v: k for k, v in vocab.items()}
-        
+        self.tagset = tagset
+
         # Dilated convolutions
         self.conv_layers = nn.ModuleList([
             nn.Conv1d(
@@ -29,10 +31,7 @@ class ConvMLM(nn.Module):
         ])
         
         self.relu = nn.ReLU()
-        self.output = nn.Linear(hidden_dim, len(vocab))
-
-    def get_token(self, id):
-        return self.vocab_inv.get(id)
+        self.output = nn.Linear(hidden_dim, len(vocab) if not tagset else len(tagset))
 
     def forward(self, x):
         # x shape: (batch_size, sequence_length)
@@ -47,6 +46,26 @@ class ConvMLM(nn.Module):
         # x shape: (batch_size, sequence_length, hidden_dim)
 
         return self.output(x)
+    
+    def save(self, path):
+        if self.tagset:
+            torch.save({
+                'state_dict': self.state_dict(),
+                'vocab': self.vocab.token2id_map,
+                'tagset': self.tagset
+            }, path)
+        else:
+            torch.save({
+                'state_dict': self.state_dict(),
+                'vocab': self.vocab.token2id_map
+            }, path)
+
+    def load(self, path):
+        checkpoint = torch.load(path)
+        self.load_state_dict(checkpoint['state_dict'])
+        self.vocab = Vocab(checkpoint['vocab'])
+        self.tagset = checkpoint['tagset'] if checkpoint['tagset'] else None
+
 
 # Load BPE mappings
 def load_bpe_mappings(file_path):
@@ -67,21 +86,24 @@ def load_bpe_mappings(file_path):
 
     return bpe_mappings
 
+
+bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
+
+
 class MLMIterableDataset(IterableDataset):
-    def __init__(self, dataset, field_name, vocab=None, mask_prob=0.05):
+    def __init__(self, dataset, field_name, vocab_threshold, vocab=None, mask_prob=0.05):
         self.dataset = dataset
         self.field_name = field_name
-        self.bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
-        self.vocab = vocab if vocab else self.build_vocabulary()
+        self.vocab = vocab if vocab else self.build_vocabulary(vocab_threshold)
         self.mask_prob = mask_prob
 
-    def build_vocabulary(self):
+    def build_vocabulary(self, vocab_threshold):
         def count_tokens(item):
             counter = Counter()
             sentence = normalize(unicodedata.normalize('NFKC', item[self.field_name]))
             for char in sentence:
-                if char in self.bpe_mappings:
-                    counter.update(self.bpe_mappings[char])
+                if char in bpe_mappings:
+                    counter.update(bpe_mappings[char])
                 else:
                     counter[char] += 1
             # Have to serialize to string because pyarrow doesn't support serialization of Counter
@@ -99,10 +121,10 @@ class MLMIterableDataset(IterableDataset):
         for token, count in counter.most_common():
             vocab[token] = len(vocab)
             current_count += count
-            if current_count / total_count > 0.9999:
+            if current_count / total_count > vocab_threshold:
                 break
 
-        return vocab
+        return Vocab(vocab)
     
     def __len__(self):
         return len(self.dataset)
@@ -115,12 +137,12 @@ class MLMIterableDataset(IterableDataset):
             # Expand to BPE
             tokens = []
             for char in sentence:
-                if char in self.bpe_mappings:
-                    tokens.extend(self.bpe_mappings[char])
+                if char in bpe_mappings:
+                    tokens.extend(bpe_mappings[char])
                 else:
                     tokens.append(char)
             # Convert to vocab indices
-            input_ids = [self.vocab.get(token, self.vocab['[UNK]']) for token in tokens]
+            input_ids = [self.vocab[token] for token in tokens]
             # Apply masking
             masked_input_ids = input_ids.copy()
             i = 0
@@ -135,7 +157,7 @@ class MLMIterableDataset(IterableDataset):
             yield torch.tensor(masked_input_ids, dtype=torch.int64), torch.tensor(input_ids, dtype=torch.int64)
 
 
-def validate(model, validation_dataloader, criterion, device):
+def validate(model, validation_dataloader, criterion, mlm_loss, device):
     model.eval()
     total_loss = 0
     total_correct = 0
@@ -148,9 +170,15 @@ def validate(model, validation_dataloader, criterion, device):
             
             outputs = model(input_ids)
             
-            # Calculate loss only on masked tokens
-            mask = input_ids == model.vocab['[MASK]']
-            loss = criterion(outputs[mask], labels[mask])
+            if mlm_loss:
+                # Calculate loss only on masked tokens
+                mask = input_ids == model.vocab['[MASK]']
+                loss = criterion(outputs[mask], labels[mask])
+            else:
+                mask = labels != model.vocab['[PAD]'] 
+                # Don't need to apply mask here because criterion already ignores padding tokens
+                loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1))
+            
             total_loss += loss.item()
 
             # Calculate accuracy
@@ -166,7 +194,7 @@ def validate(model, validation_dataloader, criterion, device):
 
 
 
-def train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device, num_epochs=40, validation_steps=0.2):
+def train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device, mlm_loss=True, num_epochs=40, validation_steps=0.2):
     model.train()
     best_val_loss = float('inf')
     global_step = 0
@@ -177,15 +205,18 @@ def train(model, dataset_name, train_dataloader, validation_dataloader, optimize
         for batch, (input_ids, labels) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
             optimizer.zero_grad()
             outputs = model(input_ids.to(device))
-            labels[input_ids != model.vocab['[MASK]']] = model.vocab['[PAD]'] # only calculate loss on masked tokens
-            loss = criterion(outputs.view(-1, len(model.vocab)), labels.view(-1).to(device))
+            if mlm_loss:
+                labels[input_ids != model.vocab['[MASK]']] = model.vocab['[PAD]'] # only calculate loss on masked tokens
+                loss = criterion(outputs.view(-1, len(model.vocab)), labels.view(-1).to(device))
+            else:
+                loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1).to(device))
             loss.backward()
             optimizer.step()
 
             wandb.log({"train_loss": loss.item()}, step=global_step)
 
             if global_step % round(validation_steps * len(train_dataloader)) == 0:
-                val_loss, val_accuracy = validate(model, validation_dataloader, criterion, device)
+                val_loss, val_accuracy = validate(model, validation_dataloader, criterion, mlm_loss, device)
                 wandb.log({
                     "val_loss": val_loss,
                     "val_accuracy": val_accuracy
@@ -193,27 +224,26 @@ def train(model, dataset_name, train_dataloader, validation_dataloader, optimize
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    torch.save(model.state_dict(), 'models/conv_mlm.pth')
+                    model.save('models/conv_mlm.pth')
 
                 model.train()  # Set the model back to training mode
             
             global_step += 1
             scheduler.step()
 
-def main():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 
-    import argparse
+def cangjie_expand(token, tag):
+    results = []
+    for char in token:
+        if char in bpe_mappings:
+            codes = bpe_mappings[char]
+            results.extend([(code, '[PAD]') for code in codes[:-1]] + [(codes[-1], tag)])
+        else:
+            results.append((char, tag))
+    return results
 
-    parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
-    parser.add_argument('--dataset', type=str, choices=['rthk', 'genius', 'tte'], required=True,
-                        help='Dataset to use for training')
-    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
-    parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
-    parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
-    parser.add_argument('--max_sequence_length', type=int, default=200, help='Maximum sequence length')
-    args = parser.parse_args()
 
+def load_dataset(args):
     if args.dataset == 'rthk':
         dataset_author = 'jed351'
         dataset_name = 'rthk_news'
@@ -226,24 +256,54 @@ def main():
         dataset_author = 'liswei'
         dataset_name = 'Taiwan-Text-Excellence-2B'
         field_name = 'text'
+    elif args.dataset == 'cityu-seg':
+        dataset_author = 'AlienKevin'
+        dataset_name = 'cityu-seg'
     else:
         raise ValueError("Invalid dataset choice")
 
-    dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
+    if args.dataset in ['rthk', 'tte', 'genius', 'tte']:
+        dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
 
-    # Split the dataset into train and validation sets
-    train_test_split = dataset.train_test_split(test_size=min(0.05*len(dataset), 10000))
-    train_dataset = train_test_split['train']
-    validation_dataset = train_test_split['test']
+        # Split the dataset into train and validation sets
+        train_test_split = dataset.train_test_split(test_size=min(0.05*len(dataset), 10000))
+        train_dataset = train_test_split['train']
+        validation_dataset = train_test_split['test']
 
-    # Create dataset and dataloader
-    train_dataset = MLMIterableDataset(train_dataset, field_name)
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
+        # Create dataset and dataloader
+        train_dataset = MLMIterableDataset(train_dataset, field_name, args.vocab_threshold)
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
+                                      collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'],
+                                      max_sequence_length=args.max_sequence_length))
 
-    validation_dataset = MLMIterableDataset(validation_dataset, field_name, vocab=train_dataset.vocab)
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
+        validation_dataset = MLMIterableDataset(validation_dataset, field_name, args.vocab_threshold, vocab=train_dataset.vocab)
+        validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size,
+                                           collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]'],
+                                           max_sequence_length=args.max_sequence_length))
+    else:
+        train_dataset = load_tagged_dataset(dataset_name, split='train', tagging_scheme=args.tagging_scheme,
+                                            transform=cangjie_expand)
+        validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme,
+                                                 transform=cangjie_expand)
 
-    model = ConvMLM(train_dataset.vocab)
+        train_dataset = TaggerDataset(train_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, sliding=False)
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
+                                      collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
+
+        print('Training dataset vocab size:', len(train_dataset.vocab))
+        print('Training dataset tagset size:', len(train_dataset.tagset))
+
+        validation_dataset = TaggerDataset(validation_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, vocab=train_dataset.vocab, tagset=train_dataset.tagset, sliding=False)
+        validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size,
+                                           collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
+
+    return dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader
+
+
+def train_model(args, device):
+    dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_dataset(args)
+
+    model = ConvMLM(train_dataset.vocab, tagset=train_dataset.tagset)
     model.to(device)
 
     # Training setup
@@ -257,7 +317,36 @@ def main():
     criterion = nn.CrossEntropyLoss(ignore_index=train_dataset.vocab['[PAD]'])
 
     # Train the model
-    train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device=device, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
+    train(model, dataset_name, train_dataloader, validation_dataloader, optimizer, scheduler, criterion, device=device, mlm_loss=not args.segmentation, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
+
+
+def infer_model(args):
+    # TODO
+    pass
+
+
+def main():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
+    parser.add_argument('--mode', type=str, choices=['train', 'infer'], required=True, help='Mode to run in')
+    parser.add_argument('--dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg'], required=True,
+                        help='Dataset to use for training')
+    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
+    parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
+    parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
+    parser.add_argument('--max_sequence_length', type=int, default=200, help='Maximum sequence length')
+    parser.add_argument('--segmentation', action='store_true', help='Do segmentation rather than MLM')
+    parser.add_argument('--tagging_scheme', type=str, choices=['BI', 'BIES'], default='BIES', help='Tagging scheme for segmentation')
+    parser.add_argument('--vocab_threshold', type=float, default=0.9999, help='Vocabulary threshold')
+    args = parser.parse_args()
+
+    if args.mode == 'train':
+        train_model(args)
+    elif args.mode == 'infer':
+        infer_model(args)
 
 if __name__ == "__main__":
     main()
