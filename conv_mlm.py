@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.utils.data import IterableDataset, DataLoader
 from datasets import load_dataset
 from collections import Counter
-import unicodedata
 import random
 from tagger_dataset import TaggerDataset, load_tagged_dataset
 from utils import normalize, pad_batch_seq, merge_tokens, score_tags
@@ -137,7 +136,7 @@ class MLMIterableDataset(IterableDataset):
     def build_vocabulary(self, vocab_threshold):
         def count_tokens(item):
             counter = Counter()
-            sentence = normalize(unicodedata.normalize('NFKC', item[self.field_name]))
+            sentence = normalize(item[self.field_name])
             for char in sentence:
                 if char in bpe_mappings:
                     counter.update(bpe_mappings[char])
@@ -170,7 +169,7 @@ class MLMIterableDataset(IterableDataset):
         for item in self.dataset:
             sentence = item[self.field_name]
             # Normalize to half-width
-            sentence = normalize(unicodedata.normalize('NFKC', sentence))
+            sentence = normalize(sentence)
             # Expand to BPE
             tokens = []
             for char in sentence:
