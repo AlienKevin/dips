@@ -38,7 +38,7 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 
 
 class ConvMLM(nn.Module):
-    def __init__(self, vocab, embedding_dim=100, hidden_dim=100, num_layers=4, tagset=None):
+    def __init__(self, vocab, embedding_dim=128, hidden_dims=[128, 128, 128], num_layers=3, tagset=None):
         super(ConvMLM, self).__init__()
         self.vocab = vocab
         self.embedding = nn.Embedding(len(vocab), embedding_dim)
@@ -47,8 +47,8 @@ class ConvMLM(nn.Module):
         # Dilated convolutions
         self.conv_layers = nn.ModuleList([
             nn.Conv1d(
-                in_channels=embedding_dim if i == 0 else hidden_dim,
-                out_channels=hidden_dim,
+                in_channels=embedding_dim if i == 0 else hidden_dims[i-1],
+                out_channels=hidden_dims[i],
                 kernel_size=3,
                 dilation=2**i,
                 padding='same'
@@ -56,7 +56,7 @@ class ConvMLM(nn.Module):
         ])
         
         self.relu = nn.ReLU()
-        self.output = nn.Linear(hidden_dim, len(vocab) if not tagset else len(tagset))
+        self.output = nn.Linear(hidden_dims[-1], len(vocab) if not tagset else len(tagset))
 
     def forward(self, x):
         # x shape: (batch_size, sequence_length)
@@ -277,7 +277,7 @@ def train(model, dataset_name, train_dataloader, validation_dataset, validation_
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    model.save('models/conv_mlm.pth')
+                    model.save(f'models/conv_mlm_{dataset_name}.pth')
 
                 model.train()  # Set the model back to training mode
             
