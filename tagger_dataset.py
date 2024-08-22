@@ -26,7 +26,7 @@ class TaggerDataset(IterableDataset):
         from collections import Counter
         vocab_counter = Counter()
         def count_chars(example):
-            for char in example['sentence']:
+            for char in example['tokens']:
                 vocab_counter[char] += 1
             return None
         self.data.map(count_chars)
@@ -62,16 +62,20 @@ class TaggerDataset(IterableDataset):
 
     def calculate_num_windows(self):
         num_windows = 0
-        for sentence, tags in self.data:
-            num_windows += len(sentence)
+        for example in self.data:
+            tokens = example['tokens']
+            tags = example['tags']
+            num_windows += len(tokens)
         return num_windows
 
     def prepare_windows(self):
-        for sentence, tags in self.data:
-            for i in range(len(sentence)):
+        for example in self.data:
+            tokens = example['tokens']
+            tags = example['tags']
+            for i in range(len(tokens)):
                 start = max(0, i - self.window_size // 2)
                 end = i + self.window_size // 2 + 1
-                window = sentence[start:end]
+                window = tokens[start:end]
                 window = [self.vocab[char] for char in window]
                 if len(window) < self.window_size:
                     pad_left = (self.window_size - len(window)) // 2
@@ -100,8 +104,10 @@ class TaggerDataset(IterableDataset):
             for window in self.prepare_windows():
                 yield window
         else:
-            for sentence, tags in self.data:
-                X = torch.tensor([self.vocab[char] for char in sentence])
+            for example in self.data:
+                tokens = example['tokens']
+                tags = example['tags']
+                X = torch.tensor([self.vocab[char] for char in tokens])
                 y = torch.tensor([self.tagset[tag] for tag in tags])
                 yield (X, y)
 
