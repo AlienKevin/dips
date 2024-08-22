@@ -25,9 +25,11 @@ class TaggerDataset(IterableDataset):
     def build_vocab(self):
         from collections import Counter
         vocab_counter = Counter()
-        for sentence, tags in self.data:
-            for char in sentence:
+        def count_chars(example):
+            for char in example['sentence']:
                 vocab_counter[char] += 1
+            return None
+        self.data.map(count_chars)
         total_chars = sum(vocab_counter.values())
         sorted_vocab = sorted(vocab_counter.items(), key=lambda x: x[1], reverse=True)
         cumulative_count = 0
@@ -47,9 +49,11 @@ class TaggerDataset(IterableDataset):
 
     def build_tagset(self):
         tagset = set()
-        for sentence, tags in self.data:
-            for tag in tags:
+        def count_tags(example):
+            for tag in example['tags']:
                 tagset.add(tag)
+            return None
+        self.data.map(count_tags)
         if self.tag_context_size > 0 or not self.sliding:
             tagset.add('[PAD]')
         tagset = sorted(list(tagset))
@@ -104,8 +108,7 @@ class TaggerDataset(IterableDataset):
 
 
 def load_helper(dataset, tagging_scheme):
-    tagged_corpus = []
-    for item in dataset:
+    def process_item(item, tagging_scheme):
         tokens = item['tokens']
         tags = item['tags']
         char_tokens = []
@@ -129,8 +132,14 @@ def load_helper(dataset, tagging_scheme):
                     char_tags.append(f"E-{tag}")
                 else:
                     char_tags.append(f"I-{tag}")
-        tagged_corpus.append((char_tokens, char_tags))
-    return tagged_corpus
+        return {'tokens': char_tokens, 'tags': char_tags}
+
+    tagged_dataset = dataset.map(
+        lambda item: process_item(item, tagging_scheme),
+        remove_columns=dataset.column_names,
+        num_proc=20
+    )
+    return tagged_dataset
 
 
 def load_ud(lang='yue',split='test'):
@@ -144,7 +153,8 @@ def load_ud(lang='yue',split='test'):
 
 
 def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None, output_format='follow_split'):
-    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg"] else dataset_name}' , split=split)
+    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg", "genius-seg"] else dataset_name}' , split=split)
+    dataset = dataset.select(range(min(len(dataset), 2000000)))
 
     if dataset_name.endswith('-seg'):
         dataset = dataset.map(lambda example: {
@@ -153,7 +163,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
         }, features=datasets.Features({
             'tokens': datasets.Sequence(datasets.features.Value('string')),
             'pos_tags_ud': datasets.Sequence(datasets.features.ClassLabel(names=['X']))
-        }))
+        }), num_proc=20)
 
     tab_label_names = dataset.features["pos_tags_ud"].feature.names
     tag_id2label = { i:k for i, k in enumerate(tab_label_names) }
@@ -161,7 +171,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
     dataset = dataset.map(lambda example: {
         'tokens': example['tokens'],
         'tags': [tag_id2label[tag] for tag in example['pos_tags_ud']]
-    })
+    }, num_proc=20)
     
     if split == 'test' or output_format == 'test':
         utterances = []
@@ -172,12 +182,14 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
     else:
         dataset = load_helper(dataset, tagging_scheme)
         if transform:
-            transformed_dataset = []
-            for chars, tags in dataset:
-                transformed_chars, transformed_tags = zip(*((transformed_token, transformed_tag) for token, tag in zip(chars, tags)
+            def apply_transform(example):
+                chars, tags = example['tokens'], example['tags']
+                transformed_chars, transformed_tags = zip(*((transformed_token, transformed_tag) 
+                                    for token, tag in zip(chars, tags)
                                     for transformed_token, transformed_tag in transform(normalize(token), tag)))
-                transformed_dataset.append((transformed_chars, transformed_tags))
-            dataset = transformed_dataset
+                return {'tokens': list(transformed_chars), 'tags': list(transformed_tags)}
+
+            dataset = dataset.map(apply_transform, num_proc=20)
         return dataset
 
 

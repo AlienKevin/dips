@@ -409,9 +409,9 @@ def main():
 
     parser = argparse.ArgumentParser(description='Train ConvMLM model on selected dataset')
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg'],
                         help='Dataset to use for testing')
     parser.add_argument('--texts', nargs='+')
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
