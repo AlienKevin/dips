@@ -22,7 +22,7 @@ if __name__ == '__main__':
     dataset = dataset.select(range(10000000)).map(tokenize_sentence, batched=True, remove_columns=["passage"], batch_size=10000, num_proc=10)
     
     # Split the dataset into train, validation, and test sets
-    train_testvalid = dataset.train_test_split(test_size=0.2, seed=42)
+    train_testvalid = dataset.train_test_split(test_size=20000*2, seed=42)
     test_valid = train_testvalid['test'].train_test_split(test_size=0.5, seed=42)
     
     dataset = DatasetDict({
