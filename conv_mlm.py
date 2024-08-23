@@ -10,6 +10,7 @@ from tqdm import tqdm
 import json
 from vocab import Vocab
 import wandb
+import os
 
 
 # Load BPE mappings
@@ -37,7 +38,7 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 
 
 class ConvMLM(nn.Module):
-    def __init__(self, cangjie_expand, vocab, embedding_dim=200, hidden_dims=[200], num_layers=1, tagset=None, char_embedding_path=None):
+    def __init__(self, cangjie_expand, vocab, embedding_dim=200, hidden_dims=[200, 200, 200, 200, 200], num_layers=5, tagset=None, char_embedding_path=None):
         super(ConvMLM, self).__init__()
         self.vocab = vocab
         if char_embedding_path is None:
@@ -135,7 +136,7 @@ class ConvMLM(nn.Module):
 
 
 class MLMIterableDataset(IterableDataset):
-    def __init__(self, cangjie_expand, dataset, field_name, vocab_threshold, vocab=None, mask_prob=0.05):
+    def __init__(self, cangjie_expand, dataset, field_name, vocab_threshold, vocab=None, mask_prob=0.15):
         self.cangjie_expand = cangjie_expand
         self.dataset = dataset
         self.field_name = field_name
@@ -193,7 +194,7 @@ class MLMIterableDataset(IterableDataset):
             i = 0
             while i < len(masked_input_ids):
                 if random.random() < self.mask_prob:
-                    mask_length = int(max(1, min(10, len(masked_input_ids) - i, round(random.gauss(6, 2)))))
+                    mask_length = 1
                     for j in range(i, i + mask_length):
                         masked_input_ids[j] = self.vocab['[MASK]']
                     i += mask_length
@@ -245,12 +246,12 @@ def validate(model, validation_dataset, validation_dataloader, criterion, mlm_lo
 
 
 
-def train(model, dataset_name, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device, mlm_loss=True, num_epochs=40, validation_steps=0.2):
+def train(model, model_path, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device, mlm_loss=True, num_epochs=40, validation_steps=0.2):
     model.train()
     best_val_loss = float('inf')
     global_step = 0
 
-    wandb.init(project="conv-mlm", name=dataset_name)
+    wandb.init(project="conv-mlm", name=os.path.basename(model_path))
 
     for epoch in range(num_epochs):
         for batch, (input_ids, labels) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
@@ -285,7 +286,7 @@ def train(model, dataset_name, train_dataloader, validation_dataset, validation_
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    model.save(f'models/conv_mlm_{dataset_name}.pth')
+                    model.save(model_path)
 
                 model.train()  # Set the model back to training mode
             
@@ -359,13 +360,14 @@ def load_train_dataset(args):
         # Reload validation in the same format as the test dataset for calculating F1 score
         validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme, output_format='test')
 
-    return dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader
+    return train_dataset, train_dataloader, validation_dataset, validation_dataloader
 
 
-def train_model(args, device):
-    dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
+def train_model(args, model_path, device):
+    train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
 
-    model = ConvMLM(args.cangjie_expand, train_dataset.vocab, tagset=train_dataset.tagset, char_embedding_path=args.char_embedding_path)
+    tagset = train_dataset.tagset if hasattr(train_dataset, 'tagset') else None
+    model = ConvMLM(args.cangjie_expand, train_dataset.vocab, tagset=tagset, char_embedding_path=args.char_embedding_path)
     model.to(device)
 
     # Training setup
@@ -379,26 +381,41 @@ def train_model(args, device):
     criterion = nn.CrossEntropyLoss()
 
     # Train the model
-    train(model, dataset_name, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device=device, mlm_loss=not args.segmentation, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
+    train(model, model_path, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device=device, mlm_loss=not args.segmentation, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
 
 
-def test_model(args):
+def test_model(args, model_path):
     test_dataset = load_tagged_dataset(args.test_dataset, 'test')
     
-    model = ConvMLM.load(f'models/conv_mlm_{args.train_dataset}.pth')
+    model = ConvMLM.load(model_path)
 
     results, errors = score_tags(test_dataset, lambda text: model.tag(text))
 
     if not args.segmentation:
         print(f"POS Tagging Accuracy: {results['pos_acc']}")
+        import json
+        # Write errors to errors.jsonl
+        with open('errors.jsonl', 'w', encoding='utf-8') as f:
+            for error in errors:
+                json.dump(error, f, ensure_ascii=False)
+                f.write('\n')
+    else:
+        import json
+        # Write errors to errors.jsonl
+        with open('errors.jsonl', 'w', encoding='utf-8') as f:
+            for error in errors:
+                json.dump({"REF": ' '.join(token for token, _ in error['reference']), "HYP": ' '.join(token for token, _ in error['hypothesis'])}, f, ensure_ascii=False)
+                f.write('\n')
+    
+    print(f"Errors have been written to errors.jsonl")
     
     print(f"Token F1 Score: {results['token_f']}")
     print(f"Token Precision: {results['token_p']}")
     print(f"Token Recall: {results['token_r']}")
 
 
-def infer_model(args):
-    model = ConvMLM.load(f'models/conv_mlm_{args.train_dataset}.pth')
+def infer_model(args, model_path):
+    model = ConvMLM.load(model_path)
 
     for text in args.texts:
         tagged = merge_tokens(model.tag(text))
@@ -431,12 +448,14 @@ def main():
     parser.add_argument('--char_embedding_path', type=str, help='Path to character embeddings')
     args = parser.parse_args()
 
+    model_path = f'models/conv_{args.train_dataset}{'_mlm' if not args.segmentation else ''}.pth'
+
     if args.mode == 'train':
-        train_model(args, device)
+        train_model(args, model_path, device)
     elif args.mode == 'infer':
-        infer_model(args)
+        infer_model(args, model_path)
     elif args.mode == 'test':
-        test_model(args)
+        test_model(args, model_path)
 
 if __name__ == "__main__":
     main()
