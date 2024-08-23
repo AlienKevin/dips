@@ -43,7 +43,7 @@ class TaggerDataset(IterableDataset):
             vocab[char] = len(vocab)
         if '[UNK]' not in vocab:
             vocab['[UNK]'] = len(vocab)
-        vocab['[PAD]'] = len(vocab)
+        vocab['[PAD]'] = -100
         print(f"Number of characters classified as [UNK]: {unk_count}")
         return Vocab(vocab)
 
@@ -54,8 +54,6 @@ class TaggerDataset(IterableDataset):
                 tagset.add(tag)
             return None
         self.data.map(count_tags)
-        if self.tag_context_size > 0 or not self.sliding:
-            tagset.add('[PAD]')
         tagset = sorted(list(tagset))
         tagset = {tag: idx for idx, tag in enumerate(tagset)}
         return Vocab(tagset)
@@ -175,7 +173,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
     tag_id2label = { i:k for i, k in enumerate(tab_label_names) }
 
     dataset = dataset.map(lambda example: {
-        'tokens': example['tokens'],
+        'tokens': [normalize(token) for token in example['tokens']],
         'tags': [tag_id2label[tag] for tag in example['pos_tags_ud']]
     }, num_proc=20)
     
@@ -192,7 +190,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
                 chars, tags = example['tokens'], example['tags']
                 transformed_chars, transformed_tags = zip(*((transformed_token, transformed_tag) 
                                     for token, tag in zip(chars, tags)
-                                    for transformed_token, transformed_tag in transform(normalize(token), tag)))
+                                    for transformed_token, transformed_tag in transform(token, tag)))
                 return {'tokens': list(transformed_chars), 'tags': list(transformed_tags)}
 
             dataset = dataset.map(apply_transform, num_proc=20)

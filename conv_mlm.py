@@ -37,11 +37,12 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 
 
 class ConvMLM(nn.Module):
-    def __init__(self, vocab, embedding_dim=128, hidden_dims=[128, 128, 128], num_layers=3, tagset=None):
+    def __init__(self, cangjie_expand, vocab, embedding_dim=200, hidden_dims=[200], num_layers=1, tagset=None):
         super(ConvMLM, self).__init__()
         self.vocab = vocab
         self.embedding = nn.Embedding(len(vocab), embedding_dim)
         self.tagset = tagset
+        self.cangjie_expand = cangjie_expand
 
         # Dilated convolutions
         self.conv_layers = nn.ModuleList([
@@ -49,7 +50,7 @@ class ConvMLM(nn.Module):
                 in_channels=embedding_dim if i == 0 else hidden_dims[i-1],
                 out_channels=hidden_dims[i],
                 kernel_size=3,
-                dilation=2**i,
+                dilation=2**i if self.cangjie_expand else 1,
                 padding='same'
             ) for i in range(num_layers)
         ])
@@ -76,12 +77,14 @@ class ConvMLM(nn.Module):
             torch.save({
                 'state_dict': self.state_dict(),
                 'vocab': self.vocab.token2id_map,
-                'tagset': self.tagset
+                'tagset': self.tagset,
+                'cangjie_expand': self.cangjie_expand
             }, path)
         else:
             torch.save({
                 'state_dict': self.state_dict(),
-                'vocab': self.vocab.token2id_map
+                'vocab': self.vocab.token2id_map,
+                'cangjie_expand': self.cangjie_expand
             }, path)
 
     @classmethod
@@ -89,7 +92,8 @@ class ConvMLM(nn.Module):
         checkpoint = torch.load(path, weights_only=False)
         vocab = Vocab(checkpoint['vocab'])
         tagset = checkpoint.get('tagset')
-        model = cls(vocab, tagset=tagset)
+        cangjie_expand = checkpoint.get('cangjie_expand', False)
+        model = cls(cangjie_expand, vocab, tagset=tagset)
         model.load_state_dict(checkpoint['state_dict'])
         return model
     
@@ -99,7 +103,7 @@ class ConvMLM(nn.Module):
         mapped_text = []
         token_map = {}
         for i, char in enumerate(normalized_text):
-            if char in bpe_mappings:
+            if self.cangjie_expand and char in bpe_mappings:
                 cangjie_codes = bpe_mappings[char]
                 mapped_text.extend(cangjie_codes)
             else:
@@ -127,7 +131,8 @@ class ConvMLM(nn.Module):
 
 
 class MLMIterableDataset(IterableDataset):
-    def __init__(self, dataset, field_name, vocab_threshold, vocab=None, mask_prob=0.05):
+    def __init__(self, cangjie_expand, dataset, field_name, vocab_threshold, vocab=None, mask_prob=0.05):
+        self.cangjie_expand = cangjie_expand
         self.dataset = dataset
         self.field_name = field_name
         self.vocab = vocab if vocab else self.build_vocabulary(vocab_threshold)
@@ -138,7 +143,7 @@ class MLMIterableDataset(IterableDataset):
             counter = Counter()
             sentence = normalize(item[self.field_name])
             for char in sentence:
-                if char in bpe_mappings:
+                if self.cangjie_expand and char in bpe_mappings:
                     counter.update(bpe_mappings[char])
                 else:
                     counter[char] += 1
@@ -173,7 +178,7 @@ class MLMIterableDataset(IterableDataset):
             # Expand to BPE
             tokens = []
             for char in sentence:
-                if char in bpe_mappings:
+                if self.cangjie_expand and char in bpe_mappings:
                     tokens.extend(bpe_mappings[char])
                 else:
                     tokens.append(char)
@@ -211,7 +216,7 @@ def validate(model, validation_dataset, validation_dataloader, criterion, mlm_lo
                 mask = input_ids == model.vocab['[MASK]']
                 loss = criterion(outputs[mask], labels[mask])
             else:
-                mask = labels != model.vocab['[PAD]'] 
+                mask = labels != -100
                 # Don't need to apply mask here because criterion already ignores padding tokens
                 loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1))
 
@@ -323,31 +328,29 @@ def load_train_dataset(args):
         validation_dataset = train_test_split['test']
 
         # Create dataset and dataloader
-        train_dataset = MLMIterableDataset(train_dataset, field_name, args.vocab_threshold)
+        train_dataset = MLMIterableDataset(args.cangjie_expand, train_dataset, field_name, args.vocab_threshold)
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
-                                      collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'],
-                                      max_sequence_length=args.max_sequence_length))
+                                      collate_fn=lambda batch: pad_batch_seq(batch, max_sequence_length=args.max_sequence_length))
 
-        validation_dataset = MLMIterableDataset(validation_dataset, field_name, args.vocab_threshold, vocab=train_dataset.vocab)
+        validation_dataset = MLMIterableDataset(args.cangjie_expand, validation_dataset, field_name, args.vocab_threshold, vocab=train_dataset.vocab)
         validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size,
-                                           collate_fn=lambda batch: pad_batch_seq(batch, validation_dataset.vocab['[PAD]'],
-                                           max_sequence_length=args.max_sequence_length))
+                                           collate_fn=lambda batch: pad_batch_seq(batch, max_sequence_length=args.max_sequence_length))
     else:
         train_dataset = load_tagged_dataset(dataset_name, split='train', tagging_scheme=args.tagging_scheme,
-                                            transform=cangjie_expand)
+                                            transform=cangjie_expand if args.cangjie_expand else None)
         validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme,
-                                                 transform=cangjie_expand)
+                                                transform=cangjie_expand if args.cangjie_expand else None)
 
         train_dataset = TaggerDataset(train_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, sliding=False)
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
-                                      collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
+                                      collate_fn=lambda batch: pad_batch_seq(batch))
 
         print('Training dataset vocab size:', len(train_dataset.vocab))
         print('Training dataset tagset size:', len(train_dataset.tagset))
 
         validation_dataset = TaggerDataset(validation_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, vocab=train_dataset.vocab, tagset=train_dataset.tagset, sliding=False)
         validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size,
-                                           collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]']))
+                                           collate_fn=lambda batch: pad_batch_seq(batch))
     
         # Reload validation in the same format as the test dataset for calculating F1 score
         validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme, output_format='test')
@@ -358,7 +361,7 @@ def load_train_dataset(args):
 def train_model(args, device):
     dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
 
-    model = ConvMLM(train_dataset.vocab, tagset=train_dataset.tagset)
+    model = ConvMLM(args.cangjie_expand, train_dataset.vocab, tagset=train_dataset.tagset)
     model.to(device)
 
     # Training setup
@@ -369,7 +372,7 @@ def train_model(args, device):
                                                     pct_start=warmup_steps/total_steps,
                                                     anneal_strategy='linear', div_factor=25.0,
                                                     final_div_factor=10000.0)
-    criterion = nn.CrossEntropyLoss(ignore_index=train_dataset.vocab['[PAD]'])
+    criterion = nn.CrossEntropyLoss()
 
     # Train the model
     train(model, dataset_name, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device=device, mlm_loss=not args.segmentation, num_epochs=args.num_epochs, validation_steps=args.validation_steps)
@@ -413,13 +416,14 @@ def main():
     parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8'],
                         help='Dataset to use for testing')
     parser.add_argument('--texts', nargs='+')
-    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
+    parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
     parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
     parser.add_argument('--max_sequence_length', type=int, default=200, help='Maximum sequence length')
     parser.add_argument('--segmentation', action='store_true', help='Do segmentation rather than MLM')
     parser.add_argument('--tagging_scheme', type=str, choices=['BI', 'BIES'], default='BIES', help='Tagging scheme for segmentation')
     parser.add_argument('--vocab_threshold', type=float, default=0.9999, help='Vocabulary threshold')
+    parser.add_argument('--cangjie_expand', action='store_true', help='Expand characters into their Cangjie codes')
     args = parser.parse_args()
 
     if args.mode == 'train':

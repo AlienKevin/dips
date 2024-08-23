@@ -654,13 +654,13 @@ if __name__ == "__main__":
         return X, extra_logits, y
 
     train_data = TaggerDataset(train_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, sliding=args.sliding)
-    train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_data.vocab['[PAD]']) if not args.sliding else sliding_collate_fn(batch))
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch) if not args.sliding else sliding_collate_fn(batch))
 
     print('Training dataset vocab size:', len(train_data.vocab))
     print('Training dataset tagset size:', len(train_data.tagset))
 
     validation_data = TaggerDataset(validation_dataset, args.window_size, args.tag_context_size, args.vocab_threshold, vocab=train_data.vocab, tagset=train_data.tagset, sliding=args.sliding)
-    validation_loader = DataLoader(validation_data, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch, train_data.vocab['[PAD]']) if not args.sliding else sliding_collate_fn)
+    validation_loader = DataLoader(validation_data, batch_size=args.batch_size, collate_fn=lambda batch: pad_batch_seq(batch) if not args.sliding else sliding_collate_fn)
 
     pos_lm = None
     if args.use_pos_lm:
