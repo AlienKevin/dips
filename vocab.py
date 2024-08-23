@@ -6,6 +6,9 @@ class Vocab:
     def __getitem__(self, token):
         return self.token2id(token)
 
+    def __contains__(self, token):
+        return token in self.token2id_map
+
     def token2id(self, token):
         return self.token2id_map[token] if token in self.token2id_map else self.token2id_map['[UNK]']
 

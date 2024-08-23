@@ -144,3 +144,30 @@ def score_tags(test_dataset, tag):
     results = scorer.score(examples)
 
     return results, errors
+
+
+def read_pretrained_embeddings(embedding_path, vocab, freeze=True):
+    word_to_embed = {}
+    unknown_embeds = []
+    with open(embedding_path, "r", encoding="utf-8") as f:
+        for line in f.readlines():
+            split = line.rstrip().split(' ')
+            if len(split) > 2:
+                word = split[0]
+                vec = torch.tensor([float(x) for x in split[1:]])
+                if word in vocab:
+                    word_to_embed[word] = vec
+                else:
+                    unknown_embeds.append(vec)
+    embedding_dim = next(iter(word_to_embed.values())).size(0)
+    out = torch.empty(len(vocab), embedding_dim)
+    torch.nn.init.uniform_(out, -0.8, 0.8)
+    
+    for word, embed in word_to_embed.items():
+        out[vocab[word]] = embed
+    
+    if unknown_embeds:
+        unk_embed = torch.stack(unknown_embeds).mean(dim=0)
+        out[vocab['[UNK]']] = unk_embed
+    
+    return torch.nn.Embedding.from_pretrained(out, freeze=freeze)

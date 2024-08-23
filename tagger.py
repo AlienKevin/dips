@@ -9,7 +9,7 @@ import math
 from tagger_dataset import TaggerDataset, load_tagged_dataset, load_ud
 import wandb
 from crf import CRF
-from utils import normalize, pad_batch_seq, merge_tokens, score_tags
+from utils import normalize, pad_batch_seq, merge_tokens, score_tags, read_pretrained_embeddings
 import datasets
 
 class LanguageModel:
@@ -66,34 +66,6 @@ class LanguageModel:
             return 1 / (len(self.vocab) + sum(self.model[ngram].values()))  # Add-1 smoothing for unseen ngrams
         else:
             return 1 / len(self.vocab)  # Handle case where ngram is not in model
-
-
-def read_pretrained_embeddings(embedding_path, vocab):
-    word_to_embed = {}
-    unknown_embeds = []
-    with open(embedding_path, "r", encoding="utf-8") as f:
-        for line in f:
-            split = line.split(' ')
-            if len(split) > 2:
-                word = split[0]
-                vec = torch.tensor([float(x) for x in split[1:]])
-                if word in vocab:
-                    word_to_embed[word] = vec
-                else:
-                    unknown_embeds.append(vec)
-    
-    embedding_dim = next(iter(word_to_embed.values())).size(0)
-    out = torch.empty(len(vocab), embedding_dim)
-    nn.init.uniform_(out, -0.8, 0.8)
-    
-    for word, embed in word_to_embed.items():
-        out[vocab[word]] = embed
-    
-    if unknown_embeds:
-        unk_embed = torch.stack(unknown_embeds).mean(dim=0)
-        out[vocab['[UNK]']] = unk_embed
-    
-    return nn.Embedding.from_pretrained(out, freeze=True)
 
 
 def create_positional_encoding(d_model, max_len):

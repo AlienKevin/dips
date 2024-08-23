@@ -5,7 +5,7 @@ from datasets import load_dataset
 from collections import Counter
 import random
 from tagger_dataset import TaggerDataset, load_tagged_dataset
-from utils import normalize, pad_batch_seq, merge_tokens, score_tags
+from utils import normalize, pad_batch_seq, merge_tokens, score_tags, read_pretrained_embeddings
 from tqdm import tqdm
 import json
 from vocab import Vocab
@@ -37,10 +37,14 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 
 
 class ConvMLM(nn.Module):
-    def __init__(self, cangjie_expand, vocab, embedding_dim=200, hidden_dims=[200], num_layers=1, tagset=None):
+    def __init__(self, cangjie_expand, vocab, embedding_dim=200, hidden_dims=[200], num_layers=1, tagset=None, char_embedding_path=None):
         super(ConvMLM, self).__init__()
         self.vocab = vocab
-        self.embedding = nn.Embedding(len(vocab), embedding_dim)
+        if char_embedding_path is None:
+            self.embedding = nn.Embedding(len(vocab), embedding_dim)
+        else:
+            self.embedding = read_pretrained_embeddings(char_embedding_path, vocab, freeze=False)
+            print('Loaded embeddings')
         self.tagset = tagset
         self.cangjie_expand = cangjie_expand
 
@@ -361,7 +365,7 @@ def load_train_dataset(args):
 def train_model(args, device):
     dataset_name, train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
 
-    model = ConvMLM(args.cangjie_expand, train_dataset.vocab, tagset=train_dataset.tagset)
+    model = ConvMLM(args.cangjie_expand, train_dataset.vocab, tagset=train_dataset.tagset, char_embedding_path=args.char_embedding_path)
     model.to(device)
 
     # Training setup
@@ -424,6 +428,7 @@ def main():
     parser.add_argument('--tagging_scheme', type=str, choices=['BI', 'BIES'], default='BIES', help='Tagging scheme for segmentation')
     parser.add_argument('--vocab_threshold', type=float, default=0.9999, help='Vocabulary threshold')
     parser.add_argument('--cangjie_expand', action='store_true', help='Expand characters into their Cangjie codes')
+    parser.add_argument('--char_embedding_path', type=str, help='Path to character embeddings')
     args = parser.parse_args()
 
     if args.mode == 'train':
