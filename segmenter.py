@@ -11,6 +11,7 @@ import json
 from vocab import Vocab
 import wandb
 import os
+import time
 
 
 # Load BPE mappings
@@ -40,10 +41,10 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 class BertConfig:
     def __init__(
         self,
-        hidden_size: int = 768,
-        num_hidden_layers: int = 12,
-        num_attention_heads: int = 12,
-        intermediate_size: int = 3072,
+        hidden_size: int = 128,
+        num_hidden_layers: int = 2,
+        num_attention_heads: int = 2,
+        intermediate_size: int = 128*4,
         hidden_act: str = "gelu",
         hidden_dropout_prob: float = 0.1,
         attention_probs_dropout_prob: float = 0.1,
@@ -547,6 +548,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Train segmenter model on selected dataset')
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
+    parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
     parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg'],
                         help='Dataset to use for training')
@@ -564,7 +566,10 @@ def main():
     parser.add_argument('--char_embedding_path', type=str, help='Path to character embeddings')
     args = parser.parse_args()
 
-    model_path = f'models/{args.config}_{args.train_dataset}{'_mlm' if not args.segmentation else ''}.pth'
+    if args.model_path:
+        model_path = args.model_path
+    else:
+        model_path = f'models/{args.config}_{args.train_dataset}{'_mlm' if not args.segmentation else ''}_{time.strftime("%m%d-%H%M")}.pth'
 
     args.config = ConvConfig() if args.config == 'conv' else BertConfig()
 
