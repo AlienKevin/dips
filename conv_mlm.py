@@ -417,7 +417,7 @@ def test_model(args, model_path):
 def infer_model(args, model_path):
     model = ConvMLM.load(model_path)
 
-    for text in args.texts:
+    for text in open(args.test_file, 'r', encoding='utf-8').readlines():
         tagged = merge_tokens(model.tag(text))
         if args.segmentation:
             print(' '.join(token for token, _ in tagged))
@@ -436,7 +436,7 @@ def main():
                         help='Dataset to use for training')
     parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8'],
                         help='Dataset to use for testing')
-    parser.add_argument('--texts', nargs='+')
+    parser.add_argument('--test_file', type=str, help='File to use for testing')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=40, help='Number of epochs to train for')
     parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
