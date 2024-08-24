@@ -17,11 +17,8 @@ def load_and_preprocess_dataset(dataset_name):
         preprocessed_data.append((text, tokens))
     return preprocessed_data
 
-def evaluate_segmentation(model, dataset_names):
+def evaluate_segmentation(tok, dataset_names):
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
-
-    # Load the model
-    tok = hanlp.load(model)
 
     for dataset_name in dataset_names:
         print(f"Evaluating on {dataset_name}")
@@ -60,6 +57,22 @@ def evaluate_segmentation(model, dataset_names):
         print()
 
 if __name__ == "__main__":
-    model = hanlp.pretrained.tok.FINE_ELECTRA_SMALL_ZH
-    dataset_names = ["AlienKevin/pku-seg", "AlienKevin/msr-seg", "AlienKevin/cityu-seg", "AlienKevin/as-seg", "AlienKevin/ctb8"]
-    evaluate_segmentation(model, dataset_names)
+    # model = hanlp.pretrained.tok.FINE_ELECTRA_SMALL_ZH
+    # model = hanlp.pretrained.tok.CTB6_CONVSEG
+    model = hanlp.pretrained.tok.SIGHAN2005_PKU_CONVSEG
+
+    # Load the model
+    tok = hanlp.load(model)
+
+    # Load sentences from data/segmentation_tests.txt
+    with open('data/segmentation_tests.txt', 'r', encoding='utf-8') as f:
+        test_sentences = [line.strip() for line in f if line.strip()]
+
+    # Segment the sentences using the loaded model
+    segmented_results = tok(test_sentences)
+
+    for original, segmented in zip(test_sentences, segmented_results):
+        print(' '.join(segmented))
+
+    dataset_names = ["AlienKevin/genius-seg", "AlienKevin/pku-seg", "AlienKevin/msr-seg", "AlienKevin/cityu-seg", "AlienKevin/as-seg", "AlienKevin/ctb8"]
+    evaluate_segmentation(tok, dataset_names)
