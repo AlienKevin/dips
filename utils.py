@@ -67,12 +67,15 @@ def pad_batch_seq(batch, max_sequence_length=None):
         X = [item[0] for item in batch]
         y = [item[1] for item in batch]
     else:
-        X = [item[0][:max_sequence_length] for item in batch]
-        y = [item[1][:max_sequence_length] for item in batch]
+        X = []
+        y = []
+        for item in batch:
+            for i in range(0, len(item[0]), max_sequence_length):
+                X.append(item[0][i:i+max_sequence_length])
+                y.append(item[1][i:i+max_sequence_length])
     X_padded = torch.nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=-100)
     y_padded = torch.nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=-100)
     return X_padded, y_padded
-
 
 
 def merge_tokens(tagged_characters, verbose=False):

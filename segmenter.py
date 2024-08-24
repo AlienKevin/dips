@@ -41,14 +41,14 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 class BertConfig:
     def __init__(
         self,
-        hidden_size: int = 128,
+        hidden_size: int = 200,
         num_hidden_layers: int = 2,
         num_attention_heads: int = 2,
-        intermediate_size: int = 128*4,
+        intermediate_size: int = 200*2,
         hidden_act: str = "gelu",
         hidden_dropout_prob: float = 0.1,
         attention_probs_dropout_prob: float = 0.1,
-        max_position_embeddings: int = 200,
+        max_position_embeddings: int = 20,
         initializer_range: float = 0.0,
         **kwargs,  # unused
     ):
@@ -212,9 +212,10 @@ class Segmenter(nn.Module):
         tagged_text = []
         if isinstance(self.config, BertConfig):
             # Windowed inference to overcome context size limit of BERT
+            # Reference: https://hanlp.hankcs.com/docs/_modules/hanlp/transform/transformer_tokenizer.html
             max_length = self.config.max_position_embeddings
             chunk_size = max_length
-            overlap = 10
+            overlap = max_length // 2
             
             for start in range(0, len(input_ids), chunk_size - overlap):
                 end = min(start + chunk_size, len(input_ids))
@@ -434,7 +435,7 @@ def load_train_dataset(args):
         dataset_author = 'liswei'
         dataset_name = 'Taiwan-Text-Excellence-2B'
         field_name = 'text'
-    elif args.train_dataset.endswith('-seg'):
+    elif args.train_dataset.endswith('-seg') or args.train_dataset == 'ctb8':
         dataset_author = 'AlienKevin'
         dataset_name = args.train_dataset
     else:
@@ -550,7 +551,7 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8'],
                         help='Dataset to use for training')
     parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8'],
                         help='Dataset to use for testing')
@@ -558,7 +559,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs to train for')
     parser.add_argument('--validation_steps', type=float, default=0.2, help='Validation steps')
-    parser.add_argument('--max_sequence_length', type=int, default=200, help='Maximum sequence length')
+    parser.add_argument('--max_sequence_length', type=int, default=20, help='Maximum sequence length')
     parser.add_argument('--segmentation', action='store_true', help='Do segmentation rather than MLM')
     parser.add_argument('--tagging_scheme', type=str, choices=['BI', 'BIES'], default='BIES', help='Tagging scheme for segmentation')
     parser.add_argument('--vocab_threshold', type=float, default=0.9999, help='Vocabulary threshold')
