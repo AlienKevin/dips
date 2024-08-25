@@ -59,13 +59,14 @@ def train(args):
     print(f"Total unique tokens across all datasets: {len(all_tokens)}")
 
 def segment(text, trie):
+    normalized_text = normalize(text)
     segmented = []
     i = 0
-    while i < len(text):
-        longest_match = trie.longest_prefix(text[i:])
+    while i < len(normalized_text):
+        longest_match = trie.longest_prefix(normalized_text[i:])
         if not longest_match:
             longest_match = text[i]
-        segmented.append(longest_match)
+        segmented.append(text[i:i+len(longest_match)])
         i += len(longest_match)
     return segmented
 
