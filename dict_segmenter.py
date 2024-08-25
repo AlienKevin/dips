@@ -42,15 +42,21 @@ def gather_tokens_from_dataset(dataset_name):
     return unique_tokens
 
 def train(args):
-    tokens = gather_tokens_from_dataset(args.train_dataset)
-    print(f"Total unique tokens in {args.train_dataset}: {len(tokens)}")
-    print(f"First 10 tokens: {tokens[:10]}")
-    print(f"Last 10 tokens: {tokens[-10:]}")
-    output_file = f"data/{args.train_dataset.split('/')[-1]}_vocab.txt"
+    all_tokens = set()
+    for dataset_name in args.train_datasets:
+        tokens = gather_tokens_from_dataset(dataset_name)
+        all_tokens.update(tokens)
+        print(f"Total unique tokens in {dataset_name}: {len(tokens)}")
+        print(f"First 10 tokens: {tokens[:10]}")
+        print(f"Last 10 tokens: {tokens[-10:]}")
+    
+    all_tokens = sorted(list(all_tokens))
+    output_file = f"data/{'_'.join(dataset.removesuffix('-seg').removesuffix('-tagged') for dataset in args.train_datasets)}_vocab.txt"
     with open(output_file, 'w', encoding='utf-8') as f:
-        for token in tokens:
+        for token in all_tokens:
             f.write(f"{token}\n")
-    print(f"Vocabulary has been written to {output_file}")
+    print(f"Combined vocabulary has been written to {output_file}")
+    print(f"Total unique tokens across all datasets: {len(all_tokens)}")
 
 def segment(text, trie):
     segmented = []
@@ -73,7 +79,7 @@ def load_vocab(vocab_file):
 
 def test(args):
     test_dataset = load_tagged_dataset(args.test_dataset, 'test')
-    trie = load_vocab(f"data/{args.train_dataset.split('/')[-1]}_vocab.txt")
+    trie = load_vocab(f"data/{'_'.join(dataset.removesuffix('-seg').removesuffix('-tagged') for dataset in args.train_datasets)}_vocab.txt")
     results, errors = score_tags(test_dataset, lambda text: [(token, 'X') for token in segment(text, trie)])
     import json
     with open('errors.jsonl', 'w', encoding='utf-8') as f:
@@ -89,7 +95,7 @@ def test(args):
 def main():
     parser = argparse.ArgumentParser(description="Extract vocabulary from a dataset")
     parser.add_argument('--mode', type=str, required=True, choices=['train', 'test'], help="Mode of operation")
-    parser.add_argument("--train_dataset", type=str, required=True, help="Name of the dataset to use for training")
+    parser.add_argument("--train_datasets", type=str, nargs='+', required=True, help="Name(s) of the dataset(s) to use for training")
     parser.add_argument("--test_dataset", type=str, required=True, help="Name of the dataset to use for testing")
     args = parser.parse_args()
 
