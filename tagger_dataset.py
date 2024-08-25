@@ -173,7 +173,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
     tag_id2label = { i:k for i, k in enumerate(tab_label_names) }
 
     dataset = dataset.map(lambda example: {
-        'tokens': [normalize(token) for token in example['tokens']],
+        'tokens': example['tokens'],
         'tags': [tag_id2label[tag] for tag in example['pos_tags_ud']]
     }, num_proc=20)
     
@@ -190,7 +190,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
                 chars, tags = example['tokens'], example['tags']
                 transformed_chars, transformed_tags = zip(*((transformed_token, transformed_tag) 
                                     for token, tag in zip(chars, tags)
-                                    for transformed_token, transformed_tag in transform(token, tag)))
+                                    for transformed_token, transformed_tag in transform(normalize(token), tag)))
                 return {'tokens': list(transformed_chars), 'tags': list(transformed_tags)}
 
             dataset = dataset.map(apply_transform, num_proc=20)
