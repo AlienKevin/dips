@@ -8,7 +8,8 @@ with open('data/STCharacters.txt', 'r', encoding='utf-8') as f:
         if len(parts) == 2:
             simplified, traditional = parts
             for char in traditional.split():
-                t2s[char] = simplified
+                if char not in t2s:
+                    t2s[char] = simplified
 
 
 def halfen(s):
