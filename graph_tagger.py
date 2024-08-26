@@ -18,20 +18,20 @@ class GCNTagger(nn.Module):
         super(GCNTagger, self).__init__()
         self.convs = nn.ModuleList()
         self.convs.append(GCNConv(input_dim, hidden_dim))
-        for _ in range(num_layers - 2):
+        for _ in range(num_layers - 1):
             self.convs.append(GCNConv(hidden_dim, hidden_dim))
-        self.convs.append(GCNConv(hidden_dim, output_dim))
+        self.output = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x, edge_index):
         for i, conv in enumerate(self.convs):
             x = conv(x, edge_index)
-            if i < len(self.convs) - 1:
-                x = F.relu(x)
-                x = F.dropout(x, p=0.1, training=self.training)
+            x = F.relu(x)
+            x = F.dropout(x, p=0.1, training=self.training)
+        x = self.output(x)
         return x
 
 
-def validate_model(model, dataset, device, batch_size=32):
+def validate_model(model, dataset, device, batch_size=256):
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     model.eval()
     total_loss = 0
@@ -55,7 +55,7 @@ def validate_model(model, dataset, device, batch_size=32):
     return avg_loss, accuracy
 
 
-def train_model(model_path, train_dataset, validation_dataset, device, num_epochs=10, batch_size=32, lr=2e-05, hidden_dim=50, num_layers=4, validation_steps=0.2):
+def train_model(model_path, train_dataset, validation_dataset, device, num_epochs=10, batch_size=256, lr=2e-05, hidden_dim=256, num_layers=2, validation_steps=0.2):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     # Initialize model

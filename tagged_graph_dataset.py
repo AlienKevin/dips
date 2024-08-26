@@ -1,10 +1,12 @@
 import torch
 from torch_geometric.data import Data, Dataset
 from typing import List
-from tqdm import tqdm
 import pygtrie
 from vocab import Vocab
 from utils import read_pretrained_embeddings
+import torch_geometric
+import networkx as nx
+import matplotlib.pyplot as plt
 
 class TaggedGraphDataset(Dataset):
     def __init__(self, tagged_dataset, lexicon: List[str], embedding_dim: int = 50, char_embedding_path=None, vocab_threshold: float = 1.0, vocab=None):
@@ -72,7 +74,9 @@ class TaggedGraphDataset(Dataset):
         
         y = torch.tensor(labels, dtype=torch.long)
         
-        # Create graph
+        # nx.draw(torch_geometric.utils.to_networkx(Data(x=char_indices, edge_index=edge_index, y=y), to_undirected=True))
+        # plt.show()
+
         return Data(x=x, edge_index=edge_index, y=y)
 
     def len(self) -> int:
