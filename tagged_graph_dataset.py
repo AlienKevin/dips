@@ -9,20 +9,15 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 class TaggedGraphDataset(Dataset):
-    def __init__(self, tagged_dataset, lexicon: List[str], embedding_dim: int = 50, char_embedding_path=None, vocab_threshold: float = 1.0, vocab=None):
+    def __init__(self, tagged_dataset, lexicon: List[str], vocab_threshold: float = 0.9999, vocab=None):
         super().__init__()
         self.tagged_dataset = tagged_dataset
         self.trie = self._build_trie(lexicon)
-        self.embedding_dim = embedding_dim
         self.vocab_threshold = vocab_threshold
         if vocab is None:
             self.vocab = self.build_vocab()
         else:
             self.vocab = vocab
-        if char_embedding_path is None:
-            self.embeddings = torch.nn.Embedding(len(self.vocab), embedding_dim)
-        else:
-            self.embeddings = read_pretrained_embeddings(char_embedding_path, self.vocab)
 
     def _build_trie(self, lexicon: List[str]) -> pygtrie.CharTrie:
         trie = pygtrie.CharTrie()
@@ -59,8 +54,7 @@ class TaggedGraphDataset(Dataset):
         labels = item['tags']
         
         # Create node features (learnable dense vectors)
-        char_indices = torch.tensor([self.vocab[char] for char in chars], dtype=torch.long)
-        x = self.embeddings(char_indices)
+        x = torch.tensor([self.vocab[char] for char in chars], dtype=torch.long)
         
         # Create edges
         edge_index = []
@@ -74,7 +68,7 @@ class TaggedGraphDataset(Dataset):
         
         y = torch.tensor(labels, dtype=torch.long)
         
-        # nx.draw(torch_geometric.utils.to_networkx(Data(x=char_indices, edge_index=edge_index, y=y), to_undirected=True))
+        # nx.draw(torch_geometric.utils.to_networkx(Data(x=x, edge_index=edge_index, y=y), to_undirected=True))
         # plt.show()
 
         return Data(x=x, edge_index=edge_index, y=y)

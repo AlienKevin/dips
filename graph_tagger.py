@@ -11,11 +11,16 @@ import datasets
 import time
 import os
 import wandb
+from utils import read_pretrained_embeddings
 
 
-class GCNTagger(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
-        super(GCNTagger, self).__init__()
+class GraphTagger(nn.Module):
+    def __init__(self, vocab, input_dim, hidden_dim, output_dim, num_layers, char_embedding_path=None):
+        super(GraphTagger, self).__init__()
+        if char_embedding_path is None:
+            self.embedding = nn.Embedding(len(vocab), input_dim)
+        else:
+            self.embedding = read_pretrained_embeddings(char_embedding_path, vocab, freeze=False)
         self.convs = nn.ModuleList()
         self.convs.append(GCNConv(input_dim, hidden_dim))
         for _ in range(num_layers - 1):
@@ -23,6 +28,7 @@ class GCNTagger(nn.Module):
         self.output = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x, edge_index):
+        x = self.embedding(x)
         for i, conv in enumerate(self.convs):
             x = conv(x, edge_index)
             x = F.relu(x)
@@ -55,14 +61,18 @@ def validate_model(model, dataset, device, batch_size=256):
     return avg_loss, accuracy
 
 
-def train_model(model_path, train_dataset, validation_dataset, device, num_epochs=10, batch_size=256, lr=2e-05, hidden_dim=256, num_layers=2, validation_steps=0.2):
+def train_model(model_path, train_dataset, validation_dataset, device, num_epochs=10, batch_size=256, lr=2e-05, embedding_dim=50, hidden_dim=256, num_layers=2, validation_steps=0.2, char_embedding_path=None):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     # Initialize model
-    model = GCNTagger(input_dim=train_dataset.embedding_dim, 
-                      hidden_dim=hidden_dim, 
-                      output_dim=len(train_dataset.tagged_dataset.features['tags'].feature.names), 
-                      num_layers=num_layers).to(device)
+    model = GraphTagger(
+        vocab=train_dataset.vocab,
+        input_dim=embedding_dim, 
+        hidden_dim=hidden_dim, 
+        output_dim=len(train_dataset.tagged_dataset.features['tags'].feature.names), 
+        num_layers=num_layers,
+        char_embedding_path=char_embedding_path
+    ).to(device)
 
     # Define optimizer and scheduler
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -136,7 +146,7 @@ if __name__ == "__main__":
     train_dataset = datasets.concatenate_datasets(train_datasets)
     validation_dataset = datasets.concatenate_datasets(validation_datasets)
 
-    train_dataset = TaggedGraphDataset(tagged_dataset=train_dataset, lexicon=list(load_lexicon(args.word_embedding_path)), char_embedding_path=args.char_embedding_path)
-    validation_dataset = TaggedGraphDataset(tagged_dataset=validation_dataset, lexicon=list(load_lexicon(args.word_embedding_path)), char_embedding_path=args.char_embedding_path, vocab=train_dataset.vocab)
+    train_dataset = TaggedGraphDataset(tagged_dataset=train_dataset, lexicon=list(load_lexicon(args.word_embedding_path)))
+    validation_dataset = TaggedGraphDataset(tagged_dataset=validation_dataset, lexicon=list(load_lexicon(args.word_embedding_path)), vocab=train_dataset.vocab)
 
-    model = train_model(model_path, train_dataset, validation_dataset, device)
+    model = train_model(model_path, train_dataset, validation_dataset, device, char_embedding_path=args.char_embedding_path)
