@@ -45,7 +45,7 @@ def train(args):
     all_tokens = set()
     for dataset_name in args.train_datasets:
         tokens = gather_tokens_from_dataset(dataset_name)
-        all_tokens.update(tokens)
+        all_tokens.update(token for token in tokens if len(token) > 1 and not token.isascii())
         print(f"Total unique tokens in {dataset_name}: {len(tokens)}")
         print(f"First 10 tokens: {tokens[:10]}")
         print(f"Last 10 tokens: {tokens[-10:]}")
@@ -96,8 +96,8 @@ def test(args):
 def main():
     parser = argparse.ArgumentParser(description="Extract vocabulary from a dataset")
     parser.add_argument('--mode', type=str, required=True, choices=['train', 'test'], help="Mode of operation")
-    parser.add_argument("--train_datasets", type=str, nargs='+', required=True, help="Name(s) of the dataset(s) to use for training")
-    parser.add_argument("--test_dataset", type=str, required=True, help="Name of the dataset to use for testing")
+    parser.add_argument("--train_datasets", type=str, nargs='+', help="Name(s) of the dataset(s) to use for training")
+    parser.add_argument("--test_dataset", type=str, help="Name of the dataset to use for testing")
     args = parser.parse_args()
 
     if args.mode == 'train':
