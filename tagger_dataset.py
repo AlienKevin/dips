@@ -118,6 +118,7 @@ def load_helper(dataset, tagging_scheme):
         char_tokens = []
         char_tags = []
         for token, tag in zip(tokens, tags):
+            token = normalize(token)
             if tag == '[PAD]':
                 char_tokens.append(token)
                 char_tags.append(tag)
@@ -190,7 +191,7 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
                 chars, tags = example['tokens'], example['tags']
                 transformed_chars, transformed_tags = zip(*((transformed_token, transformed_tag) 
                                     for token, tag in zip(chars, tags)
-                                    for transformed_token, transformed_tag in transform(normalize(token), tag)))
+                                    for transformed_token, transformed_tag in transform(token, tag)))
                 return {'tokens': list(transformed_chars), 'tags': list(transformed_tags)}
 
             dataset = dataset.map(apply_transform, num_proc=20)
