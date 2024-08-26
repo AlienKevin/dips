@@ -48,13 +48,7 @@ class TaggerDataset(IterableDataset):
         return Vocab(vocab)
 
     def build_tagset(self):
-        tagset = set()
-        def count_tags(example):
-            for tag in example['tags']:
-                tagset.add(tag)
-            return None
-        self.data.map(count_tags)
-        tagset = sorted(list(tagset))
+        tagset = self.data.features['tags'].names
         tagset = {tag: idx for idx, tag in enumerate(tagset)}
         return Vocab(tagset)
 
@@ -80,13 +74,13 @@ class TaggerDataset(IterableDataset):
                     pad_right = self.window_size - len(window) - pad_left
                     window = [self.vocab['[PAD]']] * pad_left + window + [self.vocab['[PAD]']] * pad_right
                 X = torch.tensor(window)
-                y = torch.tensor(self.tagset[tags[i]])
+                y = torch.tensor(tags[i])
                 if self.tag_context_size > 0:
                     context_tags = tags[max(0, i - self.tag_context_size):i]
                     if len(context_tags) < self.tag_context_size:
                         pad_size = self.tag_context_size - len(context_tags)
                         context_tags = ['[PAD]'] * pad_size + context_tags
-                    tag_context = torch.nn.functional.one_hot(torch.tensor([self.tagset[tag] for tag in context_tags]), num_classes=len(self.tagset)).to(torch.float)
+                    tag_context = torch.nn.functional.one_hot(torch.tensor(context_tags), num_classes=len(self.tagset)).to(torch.float)
                     yield (X, tag_context, y)
                 else:
                     yield (X, None, y)
@@ -106,7 +100,7 @@ class TaggerDataset(IterableDataset):
                 tokens = example['tokens']
                 tags = example['tags']
                 X = torch.tensor([self.vocab[char] for char in tokens])
-                y = torch.tensor([self.tagset[tag] for tag in tags])
+                y = torch.tensor(tags)
                 yield (X, y)
 
 
@@ -161,7 +155,9 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
     dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg", "genius-seg"] else dataset_name}' , split=split)
     dataset = dataset.select(range(min(len(dataset), 2000000)))
 
-    if dataset_name.endswith('-seg'):
+    segmentation_only = dataset_name.endswith('-seg')
+
+    if segmentation_only:
         dataset = dataset.map(lambda example: {
             'tokens': example['tokens'],
             'pos_tags_ud': ['X' for _ in example['tokens']]
@@ -170,8 +166,8 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
             'pos_tags_ud': datasets.Sequence(datasets.features.ClassLabel(names=['X']))
         }), num_proc=20)
 
-    tab_label_names = dataset.features["pos_tags_ud"].feature.names
-    tag_id2label = { i:k for i, k in enumerate(tab_label_names) }
+    tag_label_names = dataset.features["pos_tags_ud"].feature.names
+    tag_id2label = { i:k for i, k in enumerate(tag_label_names) }
 
     dataset = dataset.map(lambda example: {
         'tokens': example['tokens'],
@@ -186,15 +182,31 @@ def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None
         return utterances
     else:
         dataset = load_helper(dataset, tagging_scheme)
+
+        # Define the tag set based on segmentation_only and tagging_scheme
+        if segmentation_only:
+            tag_names = [f"{letter}-X" for letter in tagging_scheme]
+        else:
+            tag_names = [f"{letter}-{tag}" for letter in tagging_scheme for tag in tag_label_names]
+
+        # Create a new feature for tags using ClassLabel
+        tag_feature = datasets.Sequence(datasets.features.ClassLabel(names=tag_names))
+
         if transform:
             def apply_transform(example):
                 chars, tags = example['tokens'], example['tags']
                 transformed_chars, transformed_tags = zip(*((transformed_token, transformed_tag) 
                                     for token, tag in zip(chars, tags)
                                     for transformed_token, transformed_tag in transform(token, tag)))
-                return {'tokens': list(transformed_chars), 'tags': list(transformed_tags)}
+                return {'tokens': list(transformed_chars), 'tags': tag_feature.feature.str2int(list(transformed_tags))}
 
-            dataset = dataset.map(apply_transform, num_proc=20)
+            dataset = dataset.map(apply_transform, num_proc=20, features=datasets.Features({
+                'tokens': datasets.Sequence(datasets.Value('string')),
+                'tags': tag_feature
+            }))
+        else:
+            dataset = dataset.cast_column('tags', tag_feature)
+
         return dataset
 
 
