@@ -8,3 +8,4 @@ errors.jsonl
 models/
 ctb8.0/
 __pycache__/
+data/ctb.50d.vec
