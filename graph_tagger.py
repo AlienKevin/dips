@@ -61,7 +61,7 @@ def validate_model(model, dataset, device, batch_size=256):
     return avg_loss, accuracy
 
 
-def train_model(model_path, train_dataset, validation_dataset, device, num_epochs=10, batch_size=256, lr=2e-05, embedding_dim=50, hidden_dim=256, num_layers=2, validation_steps=0.2, char_embedding_path=None):
+def train_model(model_path, train_dataset, validation_dataset, device, num_epochs=10, batch_size=256, lr=2e-05, embedding_dim=50, hidden_dim=50, num_layers=2, validation_steps=0.2, char_embedding_path=None):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     # Initialize model

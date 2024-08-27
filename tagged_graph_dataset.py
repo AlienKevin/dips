@@ -57,14 +57,20 @@ class TaggedGraphDataset(Dataset):
         x = torch.tensor([self.vocab[char] for char in chars], dtype=torch.long)
         
         # Create edges
-        edge_index = []
+        edge_index = set()
         for i in range(len(chars)):
             for j in range(i + 1, len(chars) + 1):
                 substring = ''.join(chars[i:j])
                 if self.trie.has_key(substring):
-                    edge_index.append([i, j - 1])
+                    edge_index.add((i, j - 1))
+                    edge_index.add((j - 1, i))
         
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+        # Add edges between all neighboring characters if not already added
+        for i in range(len(chars) - 1):
+            edge_index.add((i, i + 1))
+            edge_index.add((i + 1, i))
+        
+        edge_index = torch.tensor(sorted(list(edge_index)), dtype=torch.long).t().contiguous()
         
         y = torch.tensor(labels, dtype=torch.long)
         
