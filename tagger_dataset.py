@@ -48,7 +48,7 @@ class TaggerDataset(IterableDataset):
         return Vocab(vocab)
 
     def build_tagset(self):
-        tagset = self.data.features['tags'].names
+        tagset = self.data.features['tags'].feature.names
         tagset = {tag: idx for idx, tag in enumerate(tagset)}
         return Vocab(tagset)
 
