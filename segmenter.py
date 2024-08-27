@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=200, hidden_sizes=[200, 200, 200, 200, 200], kernel_size=3):
+    def __init__(self, embedding_size=100, hidden_sizes=[100, 100, 100, 100, 100], kernel_size=3):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
@@ -85,7 +85,7 @@ class ConvConfig:
 
 
 class Segmenter(nn.Module):
-    def __init__(self, cangjie_expand, vocab, config=ConvConfig(), tagset=None, char_embedding_path=None):
+    def __init__(self, cangjie_expand, vocab, config=ConvConfig(), tagset=None, char_embedding_path=None, lexicon=None):
         super(Segmenter, self).__init__()
         self.vocab = vocab
 
@@ -102,9 +102,25 @@ class Segmenter(nn.Module):
             self.embedding = nn.Embedding(len(vocab), embedding_size)
         else:
             self.embedding = read_pretrained_embeddings(char_embedding_path, vocab, freeze=False)
-            print('Loaded embeddings')
+            print('Loaded char embeddings')
         self.tagset = tagset
         self.cangjie_expand = cangjie_expand
+
+        # Build trie lexicon
+        self.use_lexicon = lexicon is not None
+        if self.use_lexicon:
+            if isinstance(lexicon, str):
+                words = []
+                with open(lexicon, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        word = line.rstrip().split()[0]
+                        words.append(word)
+                self.trie = self._build_trie(words)
+                print('Built trie lexicon')
+            else:
+                assert isinstance(lexicon, list)
+                self.trie = self._build_trie(lexicon)
+            embedding_size += 4  # Increase embedding size by 4 for BIES tags
 
         if isinstance(config, ConvConfig):
             self.conv_layers = nn.ModuleList([
@@ -142,9 +158,53 @@ class Segmenter(nn.Module):
                 nn.Linear(config.hidden_size, len(vocab) if not tagset else len(tagset), bias=True)
             )
 
+    def _build_trie(self, lexicon: list[str]):
+        import pygtrie
+        return pygtrie.CharTrie.fromkeys(lexicon)
+
+    def _longest_match_segmentation(self, chars):
+        segmentation = []
+        i = 0
+        while i < len(chars):
+            longest_match = [chars[i]]
+            for j in range(i + 1, len(chars) + 1):
+                if chars[i] == '[PAD]' or chars[i] == '[UNK]':
+                    break
+                if self.trie.has_key(''.join(chars[i:j])):
+                    longest_match = chars[i:j]
+                else:
+                    break
+            segmentation.append(longest_match)
+            i += len(longest_match)
+        return segmentation
+
+    def _get_segmentation_embedding(self, text):
+        segmentation = self._longest_match_segmentation(text)
+        embedding = []
+        for word in segmentation:
+            if len(word) == 1:
+                embedding.append([0, 0, 0, 1])  # S
+            else:
+                embedding.append([1, 0, 0, 0])  # B
+                for _ in range(len(word) - 2):
+                    embedding.append([0, 1, 0, 0])  # I
+                embedding.append([0, 0, 1, 0])  # E
+        result = torch.tensor(embedding)
+        return result
+
     def forward(self, x):
-        # x shape: (batch_size, sequence_length)
-        x = self.embedding(x)
+        if self.use_lexicon:
+            # Compute segmentation embedding for each sequence in the batch
+            seg_embeddings = []
+            def process_sequence(seq):
+                text = self.vocab.id2token_vec(seq.cpu().numpy())
+                return self._get_segmentation_embedding(text)
+            seg_embeddings = list(map(process_sequence, x))
+            seg_embeddings = torch.stack(seg_embeddings).to(x.device)
+            x = torch.cat([self.embedding(x), seg_embeddings], dim=-1)
+        else:
+            # x shape: (batch_size, sequence_length)
+            x = self.embedding(x)
 
         if isinstance(self.config, ConvConfig):
             x = x.transpose(1, 2)
@@ -171,14 +231,16 @@ class Segmenter(nn.Module):
                 'vocab': self.vocab.token2id_map,
                 'tagset': self.tagset,
                 'config': self.config,
-                'cangjie_expand': self.cangjie_expand
+                'cangjie_expand': self.cangjie_expand,
+                'lexicon': list(self.trie.keys()) if self.use_lexicon else None
             }, path)
         else:
             torch.save({
                 'state_dict': self.state_dict(),
                 'vocab': self.vocab.token2id_map,
                 'config': self.config,
-                'cangjie_expand': self.cangjie_expand
+                'cangjie_expand': self.cangjie_expand,
+                'lexicon': list(self.trie.keys()) if self.use_lexicon else None
             }, path)
 
     @classmethod
@@ -188,7 +250,8 @@ class Segmenter(nn.Module):
         vocab = Vocab(checkpoint['vocab'])
         tagset = checkpoint.get('tagset')
         cangjie_expand = checkpoint.get('cangjie_expand', False)
-        model = cls(cangjie_expand, vocab, config=config, tagset=tagset)
+        lexicon = checkpoint.get('lexicon', None)
+        model = cls(cangjie_expand, vocab, config=config, tagset=tagset, lexicon=lexicon)
         model.load_state_dict(checkpoint['state_dict'])
         return model
     
@@ -484,7 +547,7 @@ def train_model(args, model_path, device):
     train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
 
     tagset = train_dataset.tagset if hasattr(train_dataset, 'tagset') else None
-    model = Segmenter(args.cangjie_expand, train_dataset.vocab, config=args.config, tagset=tagset, char_embedding_path=args.char_embedding_path)
+    model = Segmenter(args.cangjie_expand, train_dataset.vocab, config=args.config, tagset=tagset, char_embedding_path=args.char_embedding_path, lexicon=args.lexicon_path)
     model.to(device)
 
     # Training setup
@@ -565,6 +628,7 @@ def main():
     parser.add_argument('--vocab_threshold', type=float, default=0.9999, help='Vocabulary threshold')
     parser.add_argument('--cangjie_expand', action='store_true', help='Expand characters into their Cangjie codes')
     parser.add_argument('--char_embedding_path', type=str, help='Path to character embeddings')
+    parser.add_argument('--lexicon_path', type=str, help='Path to lexicon')
     args = parser.parse_args()
 
     if args.model_path:
