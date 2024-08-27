@@ -355,7 +355,7 @@ class MLMIterableDataset(IterableDataset):
             counter.update(json.loads(c))
 
         total_count = sum(counter.values())
-        vocab = {'[PAD]': -100, '[UNK]': 1, '[MASK]': 2}
+        vocab = {'[PAD]': 0, '[UNK]': 1, '[MASK]': 2}
         current_count = 0
 
         for token, count in counter.most_common():
@@ -529,11 +529,11 @@ def load_train_dataset(args):
         # Create dataset and dataloader
         train_dataset = MLMIterableDataset(args.cangjie_expand, train_dataset, field_name, args.vocab_threshold)
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
-                                      collate_fn=lambda batch: pad_batch_seq(batch, max_sequence_length=args.max_sequence_length))
+                                      collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
 
         validation_dataset = MLMIterableDataset(args.cangjie_expand, validation_dataset, field_name, args.vocab_threshold, vocab=train_dataset.vocab)
         validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size,
-                                           collate_fn=lambda batch: pad_batch_seq(batch, max_sequence_length=args.max_sequence_length))
+                                           collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
     else:
         train_dataset = load_tagged_dataset(dataset_name, split='train', tagging_scheme=args.tagging_scheme,
                                             transform=cangjie_expand if args.cangjie_expand else None)
@@ -542,15 +542,15 @@ def load_train_dataset(args):
 
         train_dataset = TaggerDataset(train_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, sliding=False)
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
-                                      collate_fn=lambda batch: pad_batch_seq(batch, max_sequence_length=args.max_sequence_length))
+                                      collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
 
         print('Training dataset vocab size:', len(train_dataset.vocab))
         print('Training dataset tagset size:', len(train_dataset.tagset))
 
         validation_dataset = TaggerDataset(validation_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, vocab=train_dataset.vocab, tagset=train_dataset.tagset, sliding=False)
         validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size,
-                                           collate_fn=lambda batch: pad_batch_seq(batch, max_sequence_length=args.max_sequence_length))
-    
+                                           collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
+
         # Reload validation in the same format as the test dataset for calculating F1 score
         validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme, output_format='test')
 

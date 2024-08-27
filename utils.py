@@ -63,7 +63,7 @@ def normalize(text):
     return halfen(simplify(text))
 
 
-def pad_batch_seq(batch, max_sequence_length=None):
+def pad_batch_seq(batch, x_padding, max_sequence_length=None):
     if max_sequence_length is None:
         X = [item[0] for item in batch]
         y = [item[1] for item in batch]
@@ -74,7 +74,7 @@ def pad_batch_seq(batch, max_sequence_length=None):
             for i in range(0, len(item[0]), max_sequence_length):
                 X.append(item[0][i:i+max_sequence_length])
                 y.append(item[1][i:i+max_sequence_length])
-    X_padded = torch.nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=-100)
+    X_padded = torch.nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=x_padding)
     y_padded = torch.nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=-100)
     return X_padded, y_padded
 
