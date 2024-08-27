@@ -355,7 +355,7 @@ class MLMIterableDataset(IterableDataset):
             counter.update(json.loads(c))
 
         total_count = sum(counter.values())
-        vocab = {'[PAD]': 0, '[UNK]': 1, '[MASK]': 2}
+        vocab = {'[PAD]': -100, '[UNK]': 1, '[MASK]': 2}
         current_count = 0
 
         for token, count in counter.most_common():
@@ -452,7 +452,7 @@ def train(model, model_path, train_dataloader, validation_dataset, validation_da
             optimizer.zero_grad()
             outputs = model(input_ids.to(device))
             if mlm_loss:
-                labels[input_ids != model.vocab['[MASK]']] = model.vocab['[PAD]'] # only calculate loss on masked tokens
+                labels[input_ids != model.vocab['[MASK]']] = -100 # only calculate loss on masked tokens
                 loss = criterion(outputs.view(-1, len(model.vocab)), labels.view(-1).to(device))
             else:
                 loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1).to(device))
@@ -518,7 +518,7 @@ def load_train_dataset(args):
     else:
         raise ValueError("Invalid dataset choice")
 
-    if args.train_dataset in ['rthk', 'tte', 'genius', 'tte']:
+    if args.train_dataset in ['rthk', 'tte', 'genius']:
         dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
 
         # Split the dataset into train and validation sets
@@ -649,7 +649,7 @@ def main():
     if args.model_path:
         model_path = args.model_path
     else:
-        model_path = f'models/{args.config}_{args.train_dataset}{'_mlm' if not args.segmentation else ''}_{time.strftime("%m%d-%H%M")}.pth'
+        model_path = f'models/{args.config}_{args.train_dataset}{"_mlm" if not args.segmentation else ""}_{time.strftime("%m%d-%H%M")}.pth'
 
     args.config = ConvConfig() if args.config == 'conv' else BertConfig()
 
