@@ -85,11 +85,13 @@ class ConvConfig:
 
 
 class Segmenter(nn.Module):
-    def __init__(self, cangjie_expand, vocab, config=ConvConfig(), tagset=None, char_embedding_path=None, lexicon=None):
+    def __init__(self, cangjie_expand, vocab, config=ConvConfig(), tagset=None, char_embedding_path=None, lexicon=None, lexicon_match='all'):
         super(Segmenter, self).__init__()
         self.vocab = vocab
 
         self.config = config
+
+        self.lexicon_match = lexicon_match
 
         if isinstance(config, ConvConfig):
             embedding_size = config.embedding_size
@@ -166,31 +168,43 @@ class Segmenter(nn.Module):
         segmentation = []
         i = 0
         while i < len(chars):
-            longest_match = [chars[i]]
-            for j in range(i + 1, len(chars) + 1):
-                if chars[i] == '[PAD]' or chars[i] == '[UNK]':
-                    break
-                if self.trie.has_key(''.join(chars[i:j])):
-                    longest_match = chars[i:j]
-                else:
-                    break
+            prefix = self.trie.longest_prefix(''.join(chars[i:]))
+            if prefix:
+                longest_match = list(prefix.key)
+            else:
+                longest_match = [chars[i]]
             segmentation.append(longest_match)
             i += len(longest_match)
         return segmentation
 
     def _get_segmentation_embedding(self, text):
-        segmentation = self._longest_match_segmentation(text)
-        embedding = []
-        for word in segmentation:
-            if len(word) == 1:
-                embedding.append([0, 0, 0, 1])  # S
-            else:
-                embedding.append([1, 0, 0, 0])  # B
-                for _ in range(len(word) - 2):
-                    embedding.append([0, 1, 0, 0])  # I
-                embedding.append([0, 0, 1, 0])  # E
-        result = torch.tensor(embedding)
-        return result
+        if self.lexicon_match == 'fmm':
+            segmentation = self._longest_match_segmentation(text)
+            embedding = []
+            for word in segmentation:
+                if len(word) == 1:
+                    embedding.append([0, 0, 0, 1])  # S
+                else:
+                    embedding.append([1, 0, 0, 0])  # B
+                    for _ in range(len(word) - 2):
+                        embedding.append([0, 1, 0, 0])  # I
+                    embedding.append([0, 0, 1, 0])  # E
+            return torch.tensor(embedding)
+        elif self.lexicon_match == 'all':
+            result = torch.zeros(len(text), 4)  # 4 columns for B, I, E, S
+            for i in range(len(text)):
+                for j in range(i, len(text)):
+                    word = ''.join(text[i:j+1])
+                    if self.trie.has_key(word):
+                        if len(word) == 1:
+                            result[i, 3] = 1  # S
+                        else:
+                            result[i, 0] = 1  # B
+                            result[i+1:j, 1] = 1  # I
+                            result[j, 2] = 1  # E
+                    elif not self.trie.has_subtrie(word):
+                        break  # Early terminate if no prefix is matched
+            return result
 
     def forward(self, x):
         if self.use_lexicon:
@@ -547,7 +561,7 @@ def train_model(args, model_path, device):
     train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
 
     tagset = train_dataset.tagset if hasattr(train_dataset, 'tagset') else None
-    model = Segmenter(args.cangjie_expand, train_dataset.vocab, config=args.config, tagset=tagset, char_embedding_path=args.char_embedding_path, lexicon=args.lexicon_path)
+    model = Segmenter(args.cangjie_expand, train_dataset.vocab, config=args.config, tagset=tagset, char_embedding_path=args.char_embedding_path, lexicon=args.lexicon_path, lexicon_match=args.lexicon_match)
     model.to(device)
 
     # Training setup
@@ -629,6 +643,7 @@ def main():
     parser.add_argument('--cangjie_expand', action='store_true', help='Expand characters into their Cangjie codes')
     parser.add_argument('--char_embedding_path', type=str, help='Path to character embeddings')
     parser.add_argument('--lexicon_path', type=str, help='Path to lexicon')
+    parser.add_argument('--lexicon_match', type=str, choices=['fmm', 'all'], default='all', help='Lexicon match strategy')
     args = parser.parse_args()
 
     if args.model_path:
