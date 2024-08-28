@@ -85,7 +85,7 @@ class ConvConfig:
 
 
 class Segmenter(nn.Module):
-    def __init__(self, cangjie_expand, vocab, config=ConvConfig(), tagset=None, char_embedding_path=None, lexicon=None, lexicon_match='all'):
+    def __init__(self, cangjie_expand, vocab, config=ConvConfig(), tagset=None, char_embedding_path=None, lexicon=None, lexicon_match='all', pretrained_model_path=None, device=None):
         super(Segmenter, self).__init__()
         self.vocab = vocab
 
@@ -159,6 +159,27 @@ class Segmenter(nn.Module):
                 nn.GELU(),
                 nn.Linear(config.hidden_size, len(vocab) if not tagset else len(tagset), bias=True)
             )
+
+        if pretrained_model_path is not None:
+            pretrained_state_dict = torch.load(pretrained_model_path, map_location=device, weights_only=False)['state_dict']
+            model_state_dict = self.state_dict()
+            
+            # Filter out the output layer parameters
+            filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict and 'output' not in k}
+            
+            # Handle the special case for the first conv layer when using lexicon
+            if 'conv_layers.0.weight' in filtered_state_dict and 'conv_layers.0.weight' in model_state_dict:
+                pretrained_weight = filtered_state_dict['conv_layers.0.weight']
+                current_weight = model_state_dict['conv_layers.0.weight']
+                if current_weight.shape[1] - pretrained_weight.shape[1] == 4:
+                    new_weight = torch.zeros_like(current_weight)
+                    new_weight[:, :pretrained_weight.shape[1], :] = pretrained_weight
+                    filtered_state_dict['conv_layers.0.weight'] = new_weight
+            
+            # Update the model's state dict with the filtered pretrained weights
+            model_state_dict.update(filtered_state_dict)
+            self.load_state_dict(model_state_dict)
+            print('Loaded pretrained model weights')
 
     def _build_trie(self, lexicon: list[str]):
         import pygtrie
@@ -517,6 +538,13 @@ def load_train_dataset(args):
         dataset_name = args.train_dataset
     else:
         raise ValueError("Invalid dataset choice")
+    
+    vocab = None
+    if args.pretrained_model_path:
+        # Load the vocabulary from the pretrained model
+        pretrained_state_dict = torch.load(args.pretrained_model_path, map_location='cpu', weights_only=False)
+        vocab = Vocab(pretrained_state_dict['vocab'])
+        print(f"Loaded vocabulary from pretrained model. Vocab size: {len(vocab)}")
 
     if args.train_dataset in ['rthk', 'tte', 'genius']:
         dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
@@ -527,7 +555,7 @@ def load_train_dataset(args):
         validation_dataset = train_test_split['test']
 
         # Create dataset and dataloader
-        train_dataset = MLMIterableDataset(args.cangjie_expand, train_dataset, field_name, args.vocab_threshold)
+        train_dataset = MLMIterableDataset(args.cangjie_expand, train_dataset, field_name, args.vocab_threshold, vocab=vocab)
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
                                       collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
 
@@ -540,7 +568,7 @@ def load_train_dataset(args):
         validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme,
                                                 transform=cangjie_expand if args.cangjie_expand else None)
 
-        train_dataset = TaggerDataset(train_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, sliding=False)
+        train_dataset = TaggerDataset(train_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, vocab=vocab, sliding=False)
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
                                       collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
 
@@ -561,7 +589,8 @@ def train_model(args, model_path, device):
     train_dataset, train_dataloader, validation_dataset, validation_dataloader = load_train_dataset(args)
 
     tagset = train_dataset.tagset if hasattr(train_dataset, 'tagset') else None
-    model = Segmenter(args.cangjie_expand, train_dataset.vocab, config=args.config, tagset=tagset, char_embedding_path=args.char_embedding_path, lexicon=args.lexicon_path, lexicon_match=args.lexicon_match)
+    model = Segmenter(args.cangjie_expand, train_dataset.vocab, config=args.config, tagset=tagset, char_embedding_path=args.char_embedding_path,
+                    lexicon=args.lexicon_path, lexicon_match=args.lexicon_match, pretrained_model_path=args.pretrained_model_path, device=device)
     model.to(device)
 
     # Training setup
@@ -644,6 +673,7 @@ def main():
     parser.add_argument('--char_embedding_path', type=str, help='Path to character embeddings')
     parser.add_argument('--lexicon_path', type=str, help='Path to lexicon')
     parser.add_argument('--lexicon_match', type=str, choices=['fmm', 'all'], default='all', help='Lexicon match strategy')
+    parser.add_argument('--pretrained_model_path', type=str, help='Pretrained model path to initialize weights with')
     args = parser.parse_args()
 
     if args.model_path:
