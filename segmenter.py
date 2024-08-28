@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=100, hidden_sizes=[100, 100, 100, 100, 100], kernel_size=3):
+    def __init__(self, embedding_size=400, hidden_sizes=[400, 400, 400, 400, 400], kernel_size=3):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
