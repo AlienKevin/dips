@@ -179,7 +179,9 @@ class Segmenter(nn.Module):
             # Update the model's state dict with the filtered pretrained weights
             model_state_dict.update(filtered_state_dict)
             self.load_state_dict(model_state_dict)
-            print('Loaded pretrained model weights')
+            # Freeze the embedding layer
+            self.embedding.weight.requires_grad = False
+            print('Loaded pretrained model weights with frozen embedding layer')
 
     def _build_trie(self, lexicon: list[str]):
         import pygtrie
