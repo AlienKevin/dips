@@ -164,24 +164,31 @@ class Segmenter(nn.Module):
             pretrained_state_dict = torch.load(pretrained_model_path, map_location=device, weights_only=False)['state_dict']
             model_state_dict = self.state_dict()
             
-            # Filter out the output layer parameters
-            filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict and 'output' not in k}
+            if tagset is None:
+                # Continued MLM training
+                self.load_state_dict(model_state_dict)
+                print('Loaded pretrained model weights')
+            else:
+                # Fine-tune MLM pretrained model for taggign
+
+                # Filter out the output layer parameters
+                filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict and 'output' not in k}
+                
+                # Handle the special case for the first conv layer when using lexicon
+                if 'conv_layers.0.weight' in filtered_state_dict and 'conv_layers.0.weight' in model_state_dict:
+                    pretrained_weight = filtered_state_dict['conv_layers.0.weight']
+                    current_weight = model_state_dict['conv_layers.0.weight']
+                    if current_weight.shape[1] - pretrained_weight.shape[1] == 4:
+                        new_weight = torch.zeros_like(current_weight)
+                        new_weight[:, :pretrained_weight.shape[1], :] = pretrained_weight
+                        filtered_state_dict['conv_layers.0.weight'] = new_weight
             
-            # Handle the special case for the first conv layer when using lexicon
-            if 'conv_layers.0.weight' in filtered_state_dict and 'conv_layers.0.weight' in model_state_dict:
-                pretrained_weight = filtered_state_dict['conv_layers.0.weight']
-                current_weight = model_state_dict['conv_layers.0.weight']
-                if current_weight.shape[1] - pretrained_weight.shape[1] == 4:
-                    new_weight = torch.zeros_like(current_weight)
-                    new_weight[:, :pretrained_weight.shape[1], :] = pretrained_weight
-                    filtered_state_dict['conv_layers.0.weight'] = new_weight
-            
-            # Update the model's state dict with the filtered pretrained weights
-            model_state_dict.update(filtered_state_dict)
-            self.load_state_dict(model_state_dict)
-            # Freeze the embedding layer
-            self.embedding.weight.requires_grad = False
-            print('Loaded pretrained model weights with frozen embedding layer')
+                # Update the model's state dict with the filtered pretrained weights
+                model_state_dict.update(filtered_state_dict)
+                self.load_state_dict(model_state_dict)
+                # Freeze the embedding layer
+                self.embedding.weight.requires_grad = False
+                print('Loaded pretrained model weights with frozen embedding layer')
 
     def _build_trie(self, lexicon: list[str]):
         import pygtrie
