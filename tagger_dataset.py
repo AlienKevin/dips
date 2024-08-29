@@ -152,7 +152,7 @@ def load_ud(lang='yue',split='test'):
 
 
 def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None, output_format='follow_split'):
-    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg", "genius-seg"] else dataset_name}' , split=split)
+    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg", "genius-seg", "hkcancor"] else dataset_name}' , split=split)
     dataset = dataset.select(range(min(len(dataset), 2000000)))
 
     segmentation_only = dataset_name.endswith('-seg')

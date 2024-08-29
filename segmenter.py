@@ -542,6 +542,9 @@ def load_train_dataset(args):
         dataset_author = 'liswei'
         dataset_name = 'Taiwan-Text-Excellence-2B'
         field_name = 'text'
+    elif args.train_dataset == 'hkcancor':
+        dataset_author = 'AlienKevin'
+        dataset_name = 'hkcancor'
     elif args.train_dataset.endswith('-seg') or args.train_dataset == 'ctb8':
         dataset_author = 'AlienKevin'
         dataset_name = args.train_dataset
@@ -666,7 +669,7 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor'],
                         help='Dataset to use for training')
     parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8'],
                         help='Dataset to use for testing')
