@@ -41,15 +41,15 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 class BertConfig:
     def __init__(
         self,
-        hidden_size: int = 200,
-        num_hidden_layers: int = 2,
-        num_attention_heads: int = 2,
-        intermediate_size: int = 200*2,
+        hidden_size: int = 312,
+        num_hidden_layers: int = 4,
+        num_attention_heads: int = 12,
+        intermediate_size: int = 1248,
         hidden_act: str = "gelu",
         hidden_dropout_prob: float = 0.1,
         attention_probs_dropout_prob: float = 0.1,
-        max_position_embeddings: int = 20,
-        initializer_range: float = 0.0,
+        max_position_embeddings: int = 200,
+        initializer_range: float = 0.02,
         **kwargs,  # unused
     ):
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
