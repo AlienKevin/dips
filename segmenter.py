@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=400, hidden_sizes=[400, 400, 400, 400, 400], kernel_size=3):
+    def __init__(self, embedding_size=800, hidden_sizes=[800, 800, 800, 800, 800], kernel_size=3):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
@@ -169,26 +169,31 @@ class Segmenter(nn.Module):
                 self.load_state_dict(model_state_dict)
                 print('Loaded pretrained model weights')
             else:
-                # Fine-tune MLM pretrained model for taggign
-
+                # Fine-tune MLM pretrained model for tagging
                 # Filter out the output layer parameters
-                filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict and 'output' not in k}
+                if isinstance(config, ConvConfig):
+                    filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict and 'output' not in k}
                 
-                # Handle the special case for the first conv layer when using lexicon
-                if 'conv_layers.0.weight' in filtered_state_dict and 'conv_layers.0.weight' in model_state_dict:
-                    pretrained_weight = filtered_state_dict['conv_layers.0.weight']
-                    current_weight = model_state_dict['conv_layers.0.weight']
-                    if current_weight.shape[1] - pretrained_weight.shape[1] == 4:
-                        new_weight = torch.zeros_like(current_weight)
-                        new_weight[:, :pretrained_weight.shape[1], :] = pretrained_weight
-                        filtered_state_dict['conv_layers.0.weight'] = new_weight
-            
+                    # Handle the special case for the first conv layer when using lexicon
+                    if 'conv_layers.0.weight' in filtered_state_dict and 'conv_layers.0.weight' in model_state_dict:
+                        pretrained_weight = filtered_state_dict['conv_layers.0.weight']
+                        current_weight = model_state_dict['conv_layers.0.weight']
+                        if current_weight.shape[1] - pretrained_weight.shape[1] == 4:
+                            new_weight = torch.zeros_like(current_weight)
+                            new_weight[:, :pretrained_weight.shape[1], :] = pretrained_weight
+                            filtered_state_dict['conv_layers.0.weight'] = new_weight
+                elif isinstance(config, BertConfig):
+                    filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict and 'output.3' not in k}
+
                 # Update the model's state dict with the filtered pretrained weights
                 model_state_dict.update(filtered_state_dict)
                 self.load_state_dict(model_state_dict)
-                # Freeze the embedding layer
-                self.embedding.weight.requires_grad = False
-                print('Loaded pretrained model weights with frozen embedding layer')
+                if isinstance(config, ConvConfig):
+                    # Freeze the embedding layer
+                    self.embedding.weight.requires_grad = False
+                    print('Loaded pretrained model weights with frozen embedding layer')
+                else:
+                    print('Loaded pretrained model weights')
 
     def _build_trie(self, lexicon: list[str]):
         import pygtrie
@@ -606,13 +611,17 @@ def train_model(args, model_path, device):
     model.to(device)
 
     # Training setup
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     total_steps = len(train_dataloader) * args.num_epochs
     warmup_steps = int(0.1 * len(train_dataloader))  # 10% of first epoch
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1e-3, total_steps=total_steps,
                                                     pct_start=warmup_steps/total_steps,
                                                     anneal_strategy='linear', div_factor=25.0,
                                                     final_div_factor=10000.0)
+    
+    # Fixed learning rate
+    # scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1.0, total_iters=0)
+    
     criterion = nn.CrossEntropyLoss()
 
     # Train the model
