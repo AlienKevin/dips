@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=800, hidden_sizes=[800, 800, 800, 800, 800], kernel_size=3):
+    def __init__(self, embedding_size=200, hidden_sizes=[200, 200, 200, 200, 200], kernel_size=3):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
@@ -550,6 +550,10 @@ def load_train_dataset(args):
     elif args.train_dataset == 'hkcancor':
         dataset_author = 'AlienKevin'
         dataset_name = 'hkcancor'
+    elif args.train_dataset == 'yue_and_zh':
+        dataset_author = 'AlienKevin'
+        dataset_name = 'yue_and_zh_sentences'
+        field_name = 'text'
     elif args.train_dataset.endswith('-seg') or args.train_dataset == 'ctb8':
         dataset_author = 'AlienKevin'
         dataset_name = args.train_dataset
@@ -563,7 +567,7 @@ def load_train_dataset(args):
         vocab = Vocab(pretrained_state_dict['vocab'])
         print(f"Loaded vocabulary from pretrained model. Vocab size: {len(vocab)}")
 
-    if args.train_dataset in ['rthk', 'tte', 'genius']:
+    if args.train_dataset in ['rthk', 'tte', 'genius', 'yue_and_zh']:
         dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
 
         # Split the dataset into train and validation sets
@@ -678,9 +682,9 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'yue_and_zh'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh'],
                         help='Dataset to use for testing')
     parser.add_argument('--test_file', type=str, help='File to use for testing')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')
