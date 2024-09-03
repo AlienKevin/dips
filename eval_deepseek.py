@@ -4,6 +4,7 @@ from spacy.tokens import Doc
 from spacy.vocab import Vocab
 from tqdm import tqdm
 import json
+import argparse
 
 def upos_id_to_str(upos_id):
     names=[
@@ -42,6 +43,10 @@ def load_ud(lang='yue_hk'):
 
 
 if __name__ == "__main__":
+    args = argparse.ArgumentParser()
+    args.add_argument('--presegmented', action='store_true')
+    args = args.parse_args()
+
     for lang in ['yue', 'zh']:
         print(f'Testing {lang}')
         testing_samples = load_ud(lang + '_hk')
@@ -50,11 +55,11 @@ if __name__ == "__main__":
         examples = []
         errors = []
 
-        with open(f"ud_{lang}_outputs_v2/pos_results.jsonl", "r", encoding="utf-8") as f:
+        with open(f"ud_{lang}_outputs_v2{'_presegmented' if args.presegmented else ''}/pos_results.jsonl", "r", encoding="utf-8") as f:
             pos_results = [json.loads(line) for line in f]
 
         for pos_result in tqdm(pos_results):
-            input_text = pos_result["input"]
+            input_text = pos_result["input"].replace(" ", "")
             reference = next((sample for sample in testing_samples if ''.join(token for token, _ in sample) == input_text), None)
             
             if reference is None:

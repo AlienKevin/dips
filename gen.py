@@ -44,9 +44,11 @@ class Sim:
         return 1 - self.distance(other)
 
 
-def segment_words(prompt_prefix, input_sentence, in_context_samples):
+def segment_words(prompt_prefix, input_sentence, in_context_samples, presegmented):
+    if not args.presegmented:
+        input_sentence = input_sentence.replace(" ", "")
     if len(in_context_samples) == 10:
-        samples = generate_in_context_prompt(list(in_context_samples.values()))
+        samples = generate_in_context_prompt(list(in_context_samples.values()), presegmented=presegmented)
     else:
         # Convert input_sentence to Sim
         input_simhash = Sim(input_sentence)
@@ -63,7 +65,7 @@ def segment_words(prompt_prefix, input_sentence, in_context_samples):
         closest_samples = [in_context_samples[sample] for sample, _ in top_10_samples]
         
         # Generate in-context prompt using the closest samples
-        samples = generate_in_context_prompt(closest_samples)
+        samples = generate_in_context_prompt(closest_samples, presegmented=presegmented)
     
     # Write prompt and samples to a file
     with open('prompt_sample.txt', 'w', encoding='utf-8') as f:
@@ -98,7 +100,7 @@ def segment_words(prompt_prefix, input_sentence, in_context_samples):
             if "pos_tagged_words" in result_json and isinstance(result_json["pos_tagged_words"], list) and \
                 all(isinstance(item, list) and len(item) == 2 and (all(isinstance(sub_item, str) for sub_item in item)) for item in result_json["pos_tagged_words"]):
                 concatenated_words = "".join([word for word, pos in result_json["pos_tagged_words"]])
-                if concatenated_words == input_sentence:
+                if concatenated_words.replace(" ", "") == input_sentence.replace(" ", ""):
                     for word, pos in result_json["pos_tagged_words"]:
                         if pos not in valid_pos_tags:
                             raise Exception(f"Invalid POS tag '{pos}' in the result")
@@ -241,12 +243,12 @@ def cut_utterance(utterance):
     return segmented_utterances
 
 
-def generate_in_context_prompt(utterances):
+def generate_in_context_prompt(utterances, presegmented=False):
     in_context_samples = utterances
     
     # Format in-context samples for the prompt
     in_context_prompt = "\n\n".join([
-        f'EXAMPLE INPUT SENTENCE:\n{"".join([word for word, pos in sample])}\n\nEXAMPLE JSON OUTPUT:\n{json.dumps({"pos_tagged_words": [[word, pos] for word, pos in sample]}, ensure_ascii=False)}'
+        f'EXAMPLE INPUT SENTENCE:\n{(" " if presegmented else "").join([word for word, pos in sample])}\n\nEXAMPLE JSON OUTPUT:\n{json.dumps({"pos_tagged_words": [[word, pos] for word, pos in sample]}, ensure_ascii=False)}'
         for sample in in_context_samples
     ])
 
@@ -261,6 +263,7 @@ if __name__ == "__main__":
     args.add_argument('--prompt_script', type=str, choices=['simplified', 'traditional'], required=True)
     args.add_argument('--prompt_version', type=int, default=2, required=True)
     args.add_argument('--selective_in_context', action='store_true')
+    args.add_argument('--presegmented', action='store_true')
     args = args.parse_args()
 
     with open(f'data/prompt_v{args.prompt_version}_{args.prompt_language}.txt', 'r') as file:
@@ -312,13 +315,13 @@ if __name__ == "__main__":
         test_samples = test_samples.select(range(50000))['passage']
     elif args.dataset == 'ud_yue':
         test_samples = load_dataset('universal-dependencies/universal_dependencies', 'yue_hk', trust_remote_code=True)['test']
-        test_samples = test_samples['text']
+        test_samples = [' '.join(tokens) for tokens in test_samples['tokens']]
     elif args.dataset == 'ud_zh':
         test_samples = load_dataset('universal-dependencies/universal_dependencies', 'zh_hk', trust_remote_code=True)['test']
-        test_samples = test_samples['text']
+        test_samples = [' '.join(tokens) for tokens in test_samples['tokens']]
 
     # Create the output directory if it doesn't exist
-    output_dir = f'{args.dataset}_outputs_v{args.prompt_version}'
+    output_dir = f'{args.dataset}_outputs_v{args.prompt_version}{"_presegmented" if args.presegmented else ""}'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
@@ -348,7 +351,7 @@ if __name__ == "__main__":
     with open(pos_results_path, 'a+', encoding='utf-8') as file, open(pos_errors_path, 'a+', encoding='utf-8') as error_file:
         lock = Lock()
         def process_sample(input_sentence):
-            pos_result = segment_words(prompt_prefix, input_sentence.replace(" ", ""), in_context_samples)
+            pos_result = segment_words(prompt_prefix, input_sentence, in_context_samples, presegmented=args.presegmented)
             if 'error' in pos_result:
                 print(f"POS tagging failed for sentence: {input_sentence}")
                 print(f"Error: {pos_result['error']}")
