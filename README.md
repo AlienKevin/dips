@@ -7,6 +7,13 @@ Token F1 Score: 0.9137987307343609
 Token Precision: 0.9140307603017992
 Token Recall: 0.9135668189398883
 
+ud_zh
+
+POS Tagging Accuracy: 0.8556058588548602
+Token F1 Score: 0.904356846473029
+Token Precision: 0.917877447883765
+Token Recall: 0.8912287875690043
+
 bert-base-cantonese-hkcancor
 
 POS Tagging Accuracy: 0.7334137515078407
