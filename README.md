@@ -1,3 +1,12 @@
+deepseek v2 chat
+
+ud_yue
+
+POS Tagging Accuracy: 0.8351380317084888
+Token F1 Score: 0.9137987307343609
+Token Precision: 0.9140307603017992
+Token Recall: 0.9135668189398883
+
 bert-base-cantonese-hkcancor
 
 POS Tagging Accuracy: 0.7334137515078407

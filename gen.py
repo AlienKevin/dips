@@ -255,7 +255,7 @@ def generate_in_context_prompt(utterances):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long', 'genius'], required=True)
+    args.add_argument('--dataset', type=str, choices=['cc100_yue', 'lihkg', 'wiki_yue_long', 'genius', 'ud_yue', 'ud_zh'], required=True)
     args.add_argument('--prompt_dataset', type=str, choices=['hkcancor', 'zh_pud'], required=True)
     args.add_argument('--prompt_language', type=str, choices=['zh', 'yue'], required=True)
     args.add_argument('--prompt_script', type=str, choices=['simplified', 'traditional'], required=True)
@@ -310,6 +310,12 @@ if __name__ == "__main__":
     elif args.dataset == 'genius':
         test_samples = load_dataset("beyond/chinese_clean_passages_80m")['train']
         test_samples = test_samples.select(range(50000))['passage']
+    elif args.dataset == 'ud_yue':
+        test_samples = load_dataset('universal-dependencies/universal_dependencies', 'yue_hk', trust_remote_code=True)['test']
+        test_samples = test_samples['text']
+    elif args.dataset == 'ud_zh':
+        test_samples = load_dataset('universal-dependencies/universal_dependencies', 'zh_hk', trust_remote_code=True)['test']
+        test_samples = test_samples['text']
 
     # Create the output directory if it doesn't exist
     output_dir = f'{args.dataset}_outputs_v{args.prompt_version}'
