@@ -113,7 +113,8 @@ if args.dataset == 'cc100_yue':
     filtered_data = [entry for entry in combined_data if '嘅發音' not in entry['input'] and 'Hotels.com' not in entry['input']]
     print(f"Number of low-quality entries filtered: {raw_length - len(filtered_data)}")
 
-filtered_data = [entry for entry in combined_data if len(entry['input']) > 0 and len(entry['result']) > 0]
+filtered_data = [entry for entry in combined_data if len(entry['input']) > 0 and len(entry['result']) > 0 and
+                 all(len(token) > 0 for token, _ in entry['result'])]
 
 # Map the result field to tokens and pos_tags_ud
 for entry in filtered_data:
