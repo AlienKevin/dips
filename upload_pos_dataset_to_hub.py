@@ -35,7 +35,7 @@ if args.dataset == 'hkcancor':
         return {
             'tokens': example['tokens'],
             'pos_tags_prf': example['pos_tags_prf'],
-            'pos_tags_ud': pos_tags_ud,
+            'pos_tags_ud_': pos_tags_ud, # Use a different name because same name seems to cause mangled classlabel mappings
             'sentence': ''.join(example['tokens']),
             'sentence_preserved': True,
             'conversation_id': example['conversation_id'],
@@ -44,12 +44,14 @@ if args.dataset == 'hkcancor':
             'transcriptions': example['transcriptions']
         }
     
-    dataset = dataset.map(process_hkcancor)
-    
+    dataset = dataset.map(process_hkcancor, remove_columns=dataset["train"].column_names)
+    dataset = dataset.cast_column("pos_tags_ud_", datasets.Sequence(datasets.features.ClassLabel(names=all_pos_tags)))
+    dataset = dataset.rename_column("pos_tags_ud_", "pos_tags_ud")
+
     # Define features
     features = datasets.Features({
         "tokens": datasets.Sequence(datasets.Value("string")),
-        "pos_tags_prf": datasets.Sequence(datasets.Value("string")),
+        "pos_tags_prf": datasets.Sequence(datasets.features.ClassLabel(names=dataset["train"].features["pos_tags_prf"].feature.names)),
         "pos_tags_ud": datasets.Sequence(datasets.features.ClassLabel(names=all_pos_tags)),
         "sentence": datasets.Value("string"),
         "sentence_preserved": datasets.Value("bool"),
