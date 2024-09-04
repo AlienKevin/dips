@@ -49,6 +49,12 @@ def evaluate_segmentation(model_name, dataset_names):
             if current_token:
                 hypothesis.append(current_token)
 
+            if len(''.join(reference)) != len(''.join(hypothesis)):
+                print("Hypothesis does not match reference.")
+                print("HYP:" + ''.join(hypothesis))
+                print("REF:" + ''.join(reference))
+                continue
+
             target = Doc(V, words=reference, spaces=[False] * len(reference))
             predicted = Doc(V, words=hypothesis, spaces=[False] * len(hypothesis))
             example = Example(predicted, target)
@@ -70,6 +76,7 @@ def evaluate_segmentation(model_name, dataset_names):
         print()
 
 if __name__ == "__main__":
-    model_name = "toastynews/electra-hongkongese-small-hkt-ws"
-    dataset_names = ["AlienKevin/cityu-seg", "AlienKevin/as-seg"]
+    # model_name = "toastynews/electra-hongkongese-small-hkt-ws"
+    model_name = "finetune-ckip-transformers/electra_small_hkcancor"
+    dataset_names = ["AlienKevin/ud_yue_hk", "AlienKevin/ud_zh_hk", "AlienKevin/cityu-seg", "AlienKevin/as-seg"]
     evaluate_segmentation(model_name, dataset_names)
