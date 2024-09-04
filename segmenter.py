@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=200, hidden_sizes=[200, 200, 200, 200, 200], kernel_size=3):
+    def __init__(self, embedding_size=200, hidden_sizes=[200], kernel_size=3):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
@@ -554,7 +554,7 @@ def load_train_dataset(args):
         dataset_author = 'AlienKevin'
         dataset_name = 'yue_and_zh_sentences'
         field_name = 'text'
-    elif args.train_dataset.endswith('-seg') or args.train_dataset == 'ctb8':
+    elif args.train_dataset.endswith('-seg') or args.train_dataset.endswith('-tagged') or args.train_dataset == 'ctb8':
         dataset_author = 'AlienKevin'
         dataset_name = args.train_dataset
     else:
@@ -585,9 +585,9 @@ def load_train_dataset(args):
                                            collate_fn=lambda batch: pad_batch_seq(batch, train_dataset.vocab['[PAD]'], max_sequence_length=args.max_sequence_length))
     else:
         train_dataset = load_tagged_dataset(dataset_name, split='train', tagging_scheme=args.tagging_scheme,
-                                            transform=cangjie_expand if args.cangjie_expand else None)
+                                            transform=cangjie_expand if args.cangjie_expand else None, segmentation_only=True)
         validation_dataset = load_tagged_dataset(dataset_name, split='validation', tagging_scheme=args.tagging_scheme,
-                                                transform=cangjie_expand if args.cangjie_expand else None)
+                                                transform=cangjie_expand if args.cangjie_expand else None, segmentation_only=True)
 
         train_dataset = TaggerDataset(train_dataset, window_size=-1, tag_context_size=-1, vocab_threshold=args.vocab_threshold, vocab=vocab, sliding=False)
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
@@ -633,7 +633,7 @@ def train_model(args, model_path, device):
 
 
 def test_model(args, model_path):
-    test_dataset = load_tagged_dataset(args.test_dataset, 'test')
+    test_dataset = load_tagged_dataset(args.test_dataset, 'test', segmentation_only=True)
     
     model = Segmenter.load(model_path)
 
@@ -682,9 +682,9 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'yue_and_zh'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'yue_and_zh', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
                         help='Dataset to use for testing')
     parser.add_argument('--test_file', type=str, help='File to use for testing')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')
@@ -716,4 +716,7 @@ def main():
         test_model(args, model_path)
 
 if __name__ == "__main__":
+    # Hack for HuggingFace SSL error: https://stackoverflow.com/a/76218591
+    # import os
+    # os.environ['CURL_CA_BUNDLE'] = ''
     main()

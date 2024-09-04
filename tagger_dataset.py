@@ -151,20 +151,23 @@ def load_ud(lang='yue',split='test'):
     return utterances
 
 
-def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None, output_format='follow_split'):
-    dataset = load_dataset(f'AlienKevin/{(f"{dataset_name}-tagged") if dataset_name not in ["ctb8", "msr-seg", "as-seg", "cityu-seg", "pku-seg", "genius-seg", "hkcancor"] else dataset_name}' , split=split)
+def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None, output_format='follow_split', segmentation_only=False):
+    dataset = load_dataset(f'AlienKevin/{dataset_name}' , split=split)
     dataset = dataset.select(range(min(len(dataset), 2000000)))
 
-    segmentation_only = dataset_name.endswith('-seg')
+    segmentation_only = dataset_name.endswith('-seg') or segmentation_only
 
     if segmentation_only:
+        # Remove all fields except 'tokens'
+        columns_to_remove = [col for col in dataset.features if col != 'tokens']
+        
         dataset = dataset.map(lambda example: {
             'tokens': example['tokens'],
             'pos_tags_ud': ['X' for _ in example['tokens']]
         }, features=datasets.Features({
             'tokens': datasets.Sequence(datasets.features.Value('string')),
             'pos_tags_ud': datasets.Sequence(datasets.features.ClassLabel(names=['X']))
-        }), num_proc=20)
+        }), remove_columns=columns_to_remove, num_proc=20)
 
     tag_label_names = dataset.features["pos_tags_ud"].feature.names
     tag_id2label = { i:k for i, k in enumerate(tag_label_names) }
