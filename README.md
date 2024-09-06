@@ -97,6 +97,31 @@ Token F1 Score: 0.9211
 Token Precision: 0.8962
 Token Recall: 0.9475
 
+bert_tiny_chinese_hkcancor_multi
+
+ud_yue
+
+Token F1 Score: 0.9254
+Token Precision: 0.9042
+Token Recall: 0.9476
+
+ud_zh
+
+Token F1 Score: 0.9067
+Token Precision: 0.8839
+Token Recall: 0.9307
+
+cityu-seg
+
+Token F1 Score: 0.8558
+Token Precision: 0.8313
+Token Recall: 0.8818
+
+as-seg
+
+Token F1 Score: 0.8685
+Token Precision: 0.8408
+Token Recall: 0.8982
 
 
 bert-base-cantonese-hkcancor
