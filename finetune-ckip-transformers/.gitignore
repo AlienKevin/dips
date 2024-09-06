@@ -5,6 +5,7 @@ __pycache__/
 electra_small_hkcancor/
 electra_small_hkcancor_multi_dual/
 electra_small_hkcancor_multi/
+albert_tiny_chinese_hkcancor_multi/
 transformers/
 
 # C extensions

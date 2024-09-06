@@ -75,6 +75,30 @@ Token Precision: 0.9241
 Token Recall: 0.9619
 
 
+albert_tiny_chinese_hkcancor_multi
+
+ud_yue_hk
+Token F1 Score: 0.9377
+Token Precision: 0.9177
+Token Recall: 0.9586
+
+ud_zh_hk
+Token F1 Score: 0.9453
+Token Precision: 0.9282
+Token Recall: 0.9631
+
+cityu-seg
+Token F1 Score: 0.9309
+Token Precision: 0.9112
+Token Recall: 0.9516
+
+as-seg
+Token F1 Score: 0.9211
+Token Precision: 0.8962
+Token Recall: 0.9475
+
+
+
 bert-base-cantonese-hkcancor
 
 POS Tagging Accuracy: 0.7334137515078407
