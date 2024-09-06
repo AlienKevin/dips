@@ -30,8 +30,7 @@ def process_file(file_path):
                 continue
             line_chars.append(char)
             left = get_neighbor_type(line[i-1] if i > 0 else ' ')
-            right = get_neighbor_type(line[i+1] if i < len(line)-1 else ' ')
-            line_labels.append(left + right)
+            line_labels.append(left)
         chars.append(line_chars)
         labels.append(line_labels)
         all_labels.update(line_labels)

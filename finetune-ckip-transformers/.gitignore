@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 electra_small_hkcancor/
+electra_small_hkcancor_multi_dual/
 electra_small_hkcancor_multi/
 transformers/
 

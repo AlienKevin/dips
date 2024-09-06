@@ -1,6 +1,5 @@
 import json
 import random
-import re
 import datasets
 
 if __name__ == '__main__':

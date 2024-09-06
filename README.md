@@ -25,6 +25,56 @@ Token F1 Score: 0.9978432782171099
 Token Precision: 0.9969115851468793
 Token Recall: 0.9987767143987911
 
+
+electra-small-hongkongese-hkcancor-multi
+
+ud_yue
+Token F1 Score: 0.9710
+Token Precision: 0.9597
+Token Recall: 0.9827
+
+ud_zh
+Token F1 Score: 0.9680
+Token Precision: 0.9559
+Token Recall: 0.9804
+
+cityu-seg
+Token F1 Score: 0.9536
+Token Precision: 0.9389
+Token Recall: 0.9688
+
+as-seg
+Token F1 Score: 0.9420
+Token Precision: 0.9227
+Token Recall: 0.9622
+
+electra-small-hongkongese-hkcancor-multi (dual label for left and right boundaries)
+
+ud_yue
+
+Token F1 Score: 0.9677
+Token Precision: 0.9553
+Token Recall: 0.9804
+
+ud_zh
+
+Token F1 Score: 0.9586
+Token Precision: 0.9436
+Token Recall: 0.9741
+
+cityu-seg
+
+Token F1 Score: 0.9458
+Token Precision: 0.9291
+Token Recall: 0.9631
+
+as-seg
+
+Token F1 Score: 0.9426
+Token Precision: 0.9241
+Token Recall: 0.9619
+
+
 bert-base-cantonese-hkcancor
 
 POS Tagging Accuracy: 0.7334137515078407
