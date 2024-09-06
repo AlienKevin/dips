@@ -26,6 +26,60 @@ Token Precision: 0.9969115851468793
 Token Recall: 0.9987767143987911
 
 
+electra-base-hongkongese-hkcancor-multi
+
+ud_yue
+
+Token F1 Score: 0.9649
+Token Precision: 0.9560
+Token Recall: 0.9740
+
+ud_zh
+
+Token F1 Score: 0.9530
+Token Precision: 0.9438
+Token Recall: 0.9623
+
+cityu-seg
+
+Token F1 Score: 0.9314
+Token Precision: 0.9176
+Token Recall: 0.9456
+
+as-seg
+
+Token F1 Score: 0.9231
+Token Precision: 0.9084
+Token Recall: 0.9383
+
+
+electra-base-hongkongese-hkcancor-multi
+
+ud_yue_hk
+
+Token F1 Score: 0.9613
+Token Precision: 0.9521
+Token Recall: 0.9706
+
+ud_zh_hk
+
+Token F1 Score: 0.9562
+Token Precision: 0.9497
+Token Recall: 0.9628
+
+cityu-seg
+
+Token F1 Score: 0.9285
+Token Precision: 0.9145
+Token Recall: 0.9430
+
+as-seg
+
+Token F1 Score: 0.9238
+Token Precision: 0.9121
+Token Recall: 0.9358
+
+
 electra-small-hongkongese-hkcancor-multi
 
 ud_yue
