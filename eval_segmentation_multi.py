@@ -5,7 +5,6 @@ from spacy.vocab import Vocab
 from spacy.training import Example
 from spacy.scorer import Scorer
 from spacy.tokens import Doc
-from collections import defaultdict
 import json
 
 def load_and_preprocess_dataset(dataset_name):
@@ -70,7 +69,7 @@ def evaluate_segmentation(model_name, dataset_names):
                 hypothesis_coarse.append(current_token)
 
             # Map coarse tokens to fine tokens
-            coarse_to_fine = defaultdict(lambda: defaultdict(list))
+            coarse_to_fine = {}
             char_index = 0
             for coarse_token in hypothesis_coarse:
                 start = char_index
@@ -89,41 +88,20 @@ def evaluate_segmentation(model_name, dataset_names):
                         current_length += len(fine_token)
                     else:
                         break
-                coarse_to_fine[start][end] = fine_tokens
+                coarse_to_fine[(start, end)] = fine_tokens
                 char_index = end
 
             # Split/merge matching words in reference according to coarse_to_fine mapping
             new_reference = []
             char_index = 0
-            ref_start = 0
-            while ref_start < len(reference):
+            for ref_token in reference:
                 start = char_index
-
-                if not start in coarse_to_fine:
-                    ref_token = reference[ref_start]
-                    new_reference.append(ref_token)
-                    char_index += len(ref_token)
-                    ref_start += 1
-                    continue
-                
-                ref_end = ref_start + 1
-                found_match = False
-                while ref_end <= len(reference):
-                    ref_token = ''.join(reference[ref_start:ref_end])
-                    end = start + len(ref_token)
-                    if end in coarse_to_fine[start]:
-                        new_reference.extend(coarse_to_fine[start][end])
-                        found_match = True
-                        break
-                    ref_end += 1
-                
-                if found_match:
-                    ref_start = ref_end
-                    char_index = end
+                end = start + len(ref_token)
+                if (start, end) in coarse_to_fine:
+                    new_reference.extend(coarse_to_fine[(start, end)])
                 else:
-                    new_reference.append(reference[ref_start])
-                    char_index += len(reference[ref_start])
-                    ref_start += 1
+                    new_reference.append(ref_token)
+                char_index = end
 
             # Update reference with the split version
             reference = new_reference
