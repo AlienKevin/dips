@@ -29,99 +29,74 @@ Token Recall: 0.9987767143987911
 electra-small-hongkongese-hkcancor-multi
 
 ud_yue
-Token F1 Score: 0.9710
-Token Precision: 0.9597
-Token Recall: 0.9827
+Token F1 Score: 0.9543
+Token Precision: 0.9448
+Token Recall: 0.9639
 
 ud_zh
-Token F1 Score: 0.9680
-Token Precision: 0.9559
-Token Recall: 0.9804
+Token F1 Score: 0.9404
+Token Precision: 0.9333
+Token Recall: 0.9477
 
 cityu-seg
-Token F1 Score: 0.9536
-Token Precision: 0.9389
-Token Recall: 0.9688
+Token F1 Score: 0.9137
+Token Precision: 0.9029
+Token Recall: 0.9247
 
 as-seg
-Token F1 Score: 0.9420
-Token Precision: 0.9227
-Token Recall: 0.9622
-
-electra-small-hongkongese-hkcancor-multi (dual label for left and right boundaries)
-
-ud_yue
-
-Token F1 Score: 0.9677
-Token Precision: 0.9553
-Token Recall: 0.9804
-
-ud_zh
-
-Token F1 Score: 0.9586
-Token Precision: 0.9436
-Token Recall: 0.9741
-
-cityu-seg
-
-Token F1 Score: 0.9458
-Token Precision: 0.9291
-Token Recall: 0.9631
-
-as-seg
-
-Token F1 Score: 0.9426
-Token Precision: 0.9241
-Token Recall: 0.9619
+Token F1 Score: 0.9053
+Token Precision: 0.8933
+Token Recall: 0.9175
 
 
 albert_tiny_chinese_hkcancor_multi
 
 ud_yue_hk
-Token F1 Score: 0.9377
-Token Precision: 0.9177
-Token Recall: 0.9586
+Token F1 Score: 0.9195
+Token Precision: 0.9013
+Token Recall: 0.9384
 
 ud_zh_hk
-Token F1 Score: 0.9453
-Token Precision: 0.9282
-Token Recall: 0.9631
+Token F1 Score: 0.8897
+Token Precision: 0.8849
+Token Recall: 0.8945
 
 cityu-seg
-Token F1 Score: 0.9309
-Token Precision: 0.9112
-Token Recall: 0.9516
+Token F1 Score: 0.8816
+Token Precision: 0.8733
+Token Recall: 0.8900
 
 as-seg
-Token F1 Score: 0.9211
-Token Precision: 0.8962
-Token Recall: 0.9475
+Token F1 Score: 0.8699
+Token Precision: 0.8571
+Token Recall: 0.8830
+
 
 bert_tiny_chinese_hkcancor_multi
 
 ud_yue
 
-Token F1 Score: 0.9254
-Token Precision: 0.9042
-Token Recall: 0.9476
+Token F1 Score: 0.8917
+Token Precision: 0.8771
+Token Recall: 0.9068
 
 ud_zh
 
-Token F1 Score: 0.9067
-Token Precision: 0.8839
-Token Recall: 0.9307
+Token F1 Score: 0.8153
+Token Precision: 0.8160
+Token Recall: 0.8146
 
 cityu-seg
 
-Token F1 Score: 0.8558
-Token Precision: 0.8313
-Token Recall: 0.8818
+Token F1 Score: 0.7363
+Token Precision: 0.7417
+Token Recall: 0.7310
 
 as-seg
 
-Token F1 Score: 0.8685
-Token Precision: 0.8408
-Token Recall: 0.8982
+Token F1 Score: 0.7726
+Token Precision: 0.7702
+Token Recall: 0.7751
 
 
 bert-base-cantonese-hkcancor
