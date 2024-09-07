@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=200, hidden_sizes=[200], kernel_size=3):
+    def __init__(self, embedding_size=200, hidden_sizes=[200], kernel_size=11):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
@@ -384,7 +384,7 @@ class MLMIterableDataset(IterableDataset):
             # Have to serialize to string because pyarrow doesn't support serialization of Counter
             return {"counter": json.dumps(dict(counter))}
         
-        counters = self.dataset.select(range(100000)).map(count_tokens, batched=False, num_proc=10)
+        counters = self.dataset.select(range(min(100000, len(self.dataset)))).map(count_tokens, batched=False, num_proc=10)
         counter = Counter()
         for c in counters['counter']:
             counter.update(json.loads(c))
@@ -554,6 +554,14 @@ def load_train_dataset(args):
         dataset_author = 'AlienKevin'
         dataset_name = 'yue_and_zh_sentences'
         field_name = 'text'
+    elif args.train_dataset == 'tinystories_yue':
+        dataset_author = 'alvanlii'
+        dataset_name = 'tinystories_cantonese_aya32'
+        field_name = 'canto'
+    elif args.train_dataset == 'wiki-yue-long':
+        dataset_author = 'R5dwMg'
+        dataset_name = 'zh-wiki-yue-long'
+        field_name = 'text'
     elif args.train_dataset.endswith('-seg') or args.train_dataset.endswith('-tagged') or args.train_dataset == 'ctb8':
         dataset_author = 'AlienKevin'
         dataset_name = args.train_dataset
@@ -567,11 +575,11 @@ def load_train_dataset(args):
         vocab = Vocab(pretrained_state_dict['vocab'])
         print(f"Loaded vocabulary from pretrained model. Vocab size: {len(vocab)}")
 
-    if args.train_dataset in ['rthk', 'tte', 'genius', 'yue_and_zh']:
+    if args.train_dataset in ['rthk', 'tte', 'genius', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long']:
         dataset = load_dataset(f'{dataset_author}/{dataset_name}', split='train')
 
         # Split the dataset into train and validation sets
-        train_test_split = dataset.train_test_split(test_size=min(0.05*len(dataset), 10000))
+        train_test_split = dataset.train_test_split(test_size=min(int(0.05*len(dataset)), 10000))
         train_dataset = train_test_split['train']
         validation_dataset = train_test_split['test']
 
@@ -682,9 +690,9 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'yue_and_zh', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
                         help='Dataset to use for testing')
     parser.add_argument('--test_file', type=str, help='File to use for testing')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')
