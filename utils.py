@@ -136,8 +136,8 @@ def score_tags(test_dataset, tag):
     for reference in tqdm(test_dataset):
         hypothesis = merge_tokens(tag(''.join(token for token, _ in reference)))
         reference_tokens = [token for token, _ in reference]
-        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], pos=[fix_tag(tag) for _, tag in reference])
-        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], pos=[fix_tag(tag) for _, tag in hypothesis])
+        target = Doc(V, words=reference_tokens, spaces=[False for _ in reference], tags=[fix_tag(tag) for _, tag in reference])
+        predicted_doc = Doc(V, words=[token for token, _ in hypothesis], spaces=[False for _ in hypothesis], tags=[fix_tag(tag) for _, tag in hypothesis])
         example = Example(predicted_doc, target)
         examples.append(example)
 

@@ -188,12 +188,12 @@ class Segmenter(nn.Module):
                 # Update the model's state dict with the filtered pretrained weights
                 model_state_dict.update(filtered_state_dict)
                 self.load_state_dict(model_state_dict)
-                if isinstance(config, ConvConfig):
-                    # Freeze the embedding layer
-                    self.embedding.weight.requires_grad = False
-                    print('Loaded pretrained model weights with frozen embedding layer')
-                else:
-                    print('Loaded pretrained model weights')
+                # if isinstance(config, ConvConfig):
+                #     # Freeze the embedding layer
+                #     self.embedding.weight.requires_grad = False
+                #     print('Loaded pretrained model weights with frozen embedding layer')
+                # else:
+                print('Loaded pretrained model weights')
 
     def _build_trie(self, lexicon: list[str]):
         import pygtrie
@@ -550,6 +550,9 @@ def load_train_dataset(args):
     elif args.train_dataset == 'hkcancor':
         dataset_author = 'AlienKevin'
         dataset_name = 'hkcancor'
+    elif args.train_dataset == 'hkcancor-multi':
+        dataset_author = 'AlienKevin'
+        dataset_name = 'hkcancor-multi'
     elif args.train_dataset == 'yue_and_zh':
         dataset_author = 'AlienKevin'
         dataset_name = 'yue_and_zh_sentences'
@@ -690,9 +693,9 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'hkcancor-multi', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'hkcancor-multi', 'hkcancor', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
                         help='Dataset to use for testing')
     parser.add_argument('--test_file', type=str, help='File to use for testing')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')

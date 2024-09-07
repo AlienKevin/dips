@@ -153,6 +153,19 @@ def load_ud(lang='yue',split='test'):
 
 def load_tagged_dataset(dataset_name, split, tagging_scheme=None, transform=None, output_format='follow_split', segmentation_only=False):
     dataset = load_dataset(f'AlienKevin/{dataset_name}' , split=split)
+
+    if dataset_name == 'hkcancor-multi':
+        dataset = dataset.rename_column('chars', 'tokens').rename_column('labels', 'tags')
+        if split == 'test' or output_format == 'test':
+            tag_label_names = dataset.features["tags"].feature.names
+            tag_id2label = { i:k for i, k in enumerate(tag_label_names) }
+            utterances = []
+            for item in dataset:
+                utterances.append([(token, tag_id2label[tag]) for token, tag in zip(item['tokens'], item['tags'])])
+            return utterances
+        else:
+            return dataset
+
     dataset = dataset.select(range(min(len(dataset), 2000000)))
 
     segmentation_only = dataset_name.endswith('-seg') or segmentation_only
