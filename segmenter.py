@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=200, hidden_sizes=[200], kernel_size=5):
+    def __init__(self, embedding_size=200, hidden_sizes=[200], kernel_size=3):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
@@ -136,8 +136,6 @@ class Segmenter(nn.Module):
             ])
             self.relu = nn.ReLU()
             self.output = nn.Linear(output_size, len(vocab) if not tagset else len(tagset))
-            if not tagset:
-                self.real_fake_output = nn.Linear(output_size, 2)
         elif isinstance(config, BertConfig):
             self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
 
@@ -243,7 +241,7 @@ class Segmenter(nn.Module):
                         break  # Early terminate if no prefix is matched
             return result
 
-    def forward(self, x, output_real_fake=False):
+    def forward(self, x):
         if self.use_lexicon:
             # Compute segmentation embedding for each sequence in the batch
             seg_embeddings = []
@@ -273,10 +271,7 @@ class Segmenter(nn.Module):
             x = self.embedding_dropout(x)
             x = self.encoders(x)
 
-        if output_real_fake:
-           return self.real_fake_output(x)
-        else:
-            return self.output(x)
+        return self.output(x)
     
     def save(self, path):
         if self.tagset:
@@ -442,8 +437,6 @@ def validate(model, validation_dataset, validation_dataloader, criterion, mlm_lo
     total_loss = 0
     total_correct = 0
     total_tokens = 0
-    total_real_fake_correct = 0
-    total_real_fake_tokens = 0
 
     with torch.no_grad():
         for input_ids, labels in validation_dataloader:
@@ -455,19 +448,7 @@ def validate(model, validation_dataset, validation_dataloader, criterion, mlm_lo
             if mlm_loss:
                 # Calculate loss only on masked tokens
                 mask = input_ids == model.vocab['[MASK]']
-                mlm_output_loss = criterion(outputs[mask], labels[mask])
-
-                # Calculate ELECTRA-style real-fake binary loss
-                predictions = outputs.argmax(dim=-1)
-                corrupted = input_ids.detach().clone()
-                mask = input_ids == model.vocab['[MASK]']
-                corrupted[mask] = predictions[mask]
-                real_fake_outputs = model(corrupted, output_real_fake=True)
-                real_fake_labels = (corrupted == labels.to(device)).long()
-                real_fake_loss = nn.functional.cross_entropy(real_fake_outputs.view(-1, 2), real_fake_labels.view(-1))
-                
-                # Combine MLM loss and real-fake loss
-                loss = mlm_output_loss + 10 * real_fake_loss
+                loss = criterion(outputs[mask], labels[mask])
             else:
                 mask = labels != -100
                 # Don't need to apply mask here because criterion already ignores padding tokens
@@ -481,25 +462,16 @@ def validate(model, validation_dataset, validation_dataloader, criterion, mlm_lo
             total_correct += correct.sum().item()
             total_tokens += mask.sum().item()
 
-            # Calculate real-fake accuracy
-            real_fake_predictions = real_fake_outputs.argmax(dim=-1)
-            real_fake_correct = (real_fake_predictions == real_fake_labels) & mask
-            total_real_fake_correct += real_fake_correct.sum().item()
-            total_real_fake_tokens += mask.sum().item()
-
     avg_loss = total_loss / len(validation_dataloader)
     accuracy = total_correct / total_tokens if total_tokens > 0 else 0
-    
-    real_fake_accuracy = None
+
     tag_measures = None
-    if mlm_loss:
-        real_fake_accuracy = total_real_fake_correct / total_real_fake_tokens if total_real_fake_tokens > 0 else 0
-    else:
+    if not mlm_loss:
         model.to('cpu')
         tag_measures, tag_errors = score_tags(validation_dataset, lambda text: model.tag(text))
         model.to(device)
 
-    return avg_loss, accuracy, real_fake_accuracy, tag_measures
+    return avg_loss, accuracy, tag_measures
 
 
 
@@ -513,41 +485,23 @@ def train(model, model_path, train_dataloader, validation_dataset, validation_da
     for epoch in range(num_epochs):
         for batch, (input_ids, labels) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
             optimizer.zero_grad()
-            input_ids = input_ids.to(device)
-            labels = labels.to(device)
-            outputs = model(input_ids)
+            outputs = model(input_ids.to(device))
             if mlm_loss:
                 labels[input_ids != model.vocab['[MASK]']] = -100 # only calculate loss on masked tokens
-                mlm_output_loss = criterion(outputs.view(-1, len(model.vocab)), labels.view(-1))
-
-                # Calculate ELECTRA-style real-fake binary loss
-                predictions = outputs.argmax(dim=-1)
-                corrupted = input_ids.detach().clone()
-                mask = input_ids == model.vocab['[MASK]']
-                corrupted[mask] = predictions[mask]
-                real_fake_outputs = model(corrupted, output_real_fake=True)
-                real_fake_labels = (corrupted == labels).long()
-                real_fake_loss = nn.functional.cross_entropy(real_fake_outputs.view(-1, 2), real_fake_labels.view(-1))
-                
-                # Combine MLM loss and real-fake loss
-                loss = mlm_output_loss + 10 * real_fake_loss
+                loss = criterion(outputs.view(-1, len(model.vocab)), labels.view(-1).to(device))
             else:
-                loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1))
+                loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1).to(device))
             loss.backward()
             optimizer.step()
 
-            if mlm_loss:
-                wandb.log({"train_loss": loss.item(), "mlm_loss": mlm_output_loss.item(), "real_fake_loss": real_fake_loss.item()}, step=global_step)
-            else:
-                wandb.log({"train_loss": loss.item()}, step=global_step)
+            wandb.log({"train_loss": loss.item()}, step=global_step)
 
             if global_step % round(validation_steps * len(train_dataloader)) == 0:
-                val_loss, val_accuracy, val_real_fake_accuracy, tag_measures = validate(model, validation_dataset, validation_dataloader, criterion, mlm_loss, device)
+                val_loss, val_accuracy, tag_measures = validate(model, validation_dataset, validation_dataloader, criterion, mlm_loss, device)
                 if tag_measures is None:
                     wandb.log({
                         "val_loss": val_loss,
-                        "val_accuracy": val_accuracy,
-                        "val_real_fake_accuracy": val_real_fake_accuracy
+                        "val_accuracy": val_accuracy
                     }, step=global_step)
                 else:
                     wandb.log({
