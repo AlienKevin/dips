@@ -71,7 +71,7 @@ class BertConfig:
 
 
 class ConvConfig:
-    def __init__(self, embedding_size=200, hidden_sizes=[200], kernel_size=11):
+    def __init__(self, embedding_size=200, hidden_sizes=[200, 200, 200, 200, 200], kernel_size=3):
         self.embedding_size = embedding_size
         self.hidden_sizes = hidden_sizes
         self.kernel_size = kernel_size
@@ -550,9 +550,9 @@ def load_train_dataset(args):
     elif args.train_dataset == 'hkcancor':
         dataset_author = 'AlienKevin'
         dataset_name = 'hkcancor'
-    elif args.train_dataset == 'hkcancor-multi':
+    elif args.train_dataset.endswith('-multi'):
         dataset_author = 'AlienKevin'
-        dataset_name = 'hkcancor-multi'
+        dataset_name = args.train_dataset
     elif args.train_dataset == 'yue_and_zh':
         dataset_author = 'AlienKevin'
         dataset_name = 'yue_and_zh_sentences'
@@ -693,9 +693,9 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'hkcancor-multi', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'hkcancor-multi', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'wiki-yue-long-multi', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'hkcancor-multi', 'hkcancor', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'hkcancor-multi', 'hkcancor', 'genius-tagged', 'wiki-yue-long', 'wiki-yue-long-multi', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
                         help='Dataset to use for testing')
     parser.add_argument('--test_file', type=str, help='File to use for testing')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')

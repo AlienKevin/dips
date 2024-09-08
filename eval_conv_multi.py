@@ -142,6 +142,6 @@ def evaluate_segmentation(model_name, dataset_names):
         print()
 
 if __name__ == "__main__":
-    model_name = "conv_hkcancor-multi_0907-1851.pth"
+    model_name = "conv_wiki-yue-long-multi_0908-1115.pth"
     dataset_names = ["AlienKevin/ud_yue_hk", "AlienKevin/ud_zh_hk", "AlienKevin/cityu-seg", "AlienKevin/as-seg"]
     evaluate_segmentation(model_name, dataset_names)
