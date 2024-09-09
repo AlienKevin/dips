@@ -67,16 +67,26 @@ def pad_batch_seq(batch, x_padding, max_sequence_length=None):
     if max_sequence_length is None:
         X = [item[0] for item in batch]
         y = [item[1] for item in batch]
+        if len(batch[0]) == 3:
+            logits = [item[2] for item in batch]
     else:
         X = []
         y = []
+        if len(batch[0]) == 3:
+            logits = []
         for item in batch:
             for i in range(0, len(item[0]), max_sequence_length):
                 X.append(item[0][i:i+max_sequence_length])
                 y.append(item[1][i:i+max_sequence_length])
+                if len(item) == 3:
+                    logits.append(item[2][i:i+max_sequence_length])
     X_padded = torch.nn.utils.rnn.pad_sequence(X, batch_first=True, padding_value=x_padding)
     y_padded = torch.nn.utils.rnn.pad_sequence(y, batch_first=True, padding_value=-100)
-    return X_padded, y_padded
+    if len(item) == 3:
+        logits_padded = torch.nn.utils.rnn.pad_sequence(logits, batch_first=True, padding_value=-100)
+        return X_padded, y_padded, logits_padded
+    else:
+        return X_padded, y_padded
 
 
 def merge_tokens(tagged_characters, verbose=False):

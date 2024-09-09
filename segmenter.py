@@ -439,7 +439,12 @@ def validate(model, validation_dataset, validation_dataloader, criterion, mlm_lo
     total_tokens = 0
 
     with torch.no_grad():
-        for input_ids, labels in validation_dataloader:
+        for inputs in validation_dataloader:
+            if len(inputs) == 3:
+                input_ids, labels, logits = inputs
+            else:
+                input_ids, labels = inputs
+                logits = None
             input_ids = input_ids.to(device)
             labels = labels.to(device)
             
@@ -474,6 +479,14 @@ def validate(model, validation_dataset, validation_dataloader, criterion, mlm_lo
     return avg_loss, accuracy, tag_measures
 
 
+def mse_loss(input, target, ignored_index=-100, reduction="mean"):
+    mask = target == ignored_index
+    out = (input[~mask]-target[~mask])**2
+    if reduction == "mean":
+        return out.mean()
+    elif reduction == "None":
+        return out
+
 
 def train(model, model_path, train_dataloader, validation_dataset, validation_dataloader, optimizer, scheduler, criterion, device, mlm_loss=True, num_epochs=40, validation_steps=0.2):
     model.train()
@@ -483,12 +496,19 @@ def train(model, model_path, train_dataloader, validation_dataset, validation_da
     wandb.init(project="conv-mlm", name=os.path.splitext(os.path.basename(model_path))[0])
 
     for epoch in range(num_epochs):
-        for batch, (input_ids, labels) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
+        for batch, inputs in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
             optimizer.zero_grad()
+            if len(inputs) == 3:
+                input_ids, labels, logits = inputs
+            else:
+                input_ids, labels = inputs
+                logits = None
             outputs = model(input_ids.to(device))
             if mlm_loss:
                 labels[input_ids != model.vocab['[MASK]']] = -100 # only calculate loss on masked tokens
                 loss = criterion(outputs.view(-1, len(model.vocab)), labels.view(-1).to(device))
+            elif logits is not None:
+                loss = mse_loss(outputs, logits.to(device))
             else:
                 loss = criterion(outputs.view(-1, outputs.shape[-1]), labels.view(-1).to(device))
             loss.backward()

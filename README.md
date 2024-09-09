@@ -153,6 +153,61 @@ Token Precision: 0.7702
 Token Recall: 0.7751
 
 
+convseg-200x5-hkcancor-multi-distilled-from-electra-base
+
+
+ud_yue_hk
+
+Token F1 Score: 0.8393
+Token Precision: 0.8283
+Token Recall: 0.8506
+
+ud_zh_hk
+
+Token F1 Score: 0.7657
+Token Precision: 0.7609
+Token Recall: 0.7706
+
+cityu-seg
+
+Token F1 Score: 0.6849
+Token Precision: 0.6669
+Token Recall: 0.7038
+
+as-seg
+
+Token F1 Score: 0.6900
+Token Precision: 0.6725
+Token Recall: 0.7084
+
+
+convseg-200x5-hkcancor-multi
+
+ud_yue_hk
+
+Token F1 Score: 0.8080
+Token Precision: 0.8160
+Token Recall: 0.8001
+
+ud_zh_hk
+
+Token F1 Score: 0.7125
+Token Precision: 0.7303
+Token Recall: 0.6955
+
+cityu-seg
+
+Token F1 Score: 0.6504
+Token Precision: 0.6519
+Token Recall: 0.6490
+
+as-seg
+
+Token F1 Score: 0.6690
+Token Precision: 0.6733
+Token Recall: 0.6649
+
+
 convseg-200x1-kernel-size-11-hkcancor-multi
 
 ud_yue_hk

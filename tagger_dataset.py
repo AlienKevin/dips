@@ -101,7 +101,10 @@ class TaggerDataset(IterableDataset):
                 tags = example['tags']
                 X = torch.tensor([self.vocab[char] for char in tokens])
                 y = torch.tensor(tags)
-                yield (X, y)
+                if 'logits' in example:
+                    yield (X, y, torch.tensor(example['logits']))
+                else:
+                    yield (X, y)
 
 
 
