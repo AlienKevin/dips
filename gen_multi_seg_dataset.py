@@ -4,11 +4,18 @@ import torch
 import datasets
 from tqdm import tqdm
 
+batch_size = 64
+
 # Load the dataset
-dataset = load_dataset("R5dwMg/zh-wiki-yue-long")
+dataset = load_dataset("raptorkwok/cantonese_sentences")
+dataset['train'] = dataset['train'].select(range(200000))
+field_name = 'content'
+
+# dataset = load_dataset("R5dwMg/zh-wiki-yue-long")
+# field_name = 'text'
 
 # Split the dataset into train and val_test
-train_val_test = dataset['train'].train_test_split(test_size=0.1, seed=42)
+train_val_test = dataset['train'].train_test_split(test_size=min(20000, int(len(dataset['train']) * 0.1)), seed=42)
 train = train_val_test['train']
 val_test = train_val_test['test']
 
@@ -54,8 +61,8 @@ class LogitsTokenClassificationPipeline(TokenClassificationPipeline):
 nlp = LogitsTokenClassificationPipeline(model=model, device="mps" if torch.backends.mps.is_available() else "cpu", tokenizer=tokenizer)
 
 def process_batch(batch):
-    texts = [text[:512] for text in batch['text']]  # Truncate to 512 characters
-    outputs = nlp(texts, batch_size=32)
+    texts = [text[:510] for text in batch[field_name]]  # Truncate to 512 characters
+    outputs = nlp(texts, batch_size=batch_size)
     
     processed_batch = []
     for tokens, token_logits in outputs:
@@ -79,8 +86,8 @@ def process_batch(batch):
 processed_data = {'train': [], 'validation': [], 'test': []}
 
 for split in ['train', 'validation', 'test']:
-    for i in tqdm(range(0, len(dataset[split]), 32)):  # Process in batches of 32
-        batch = dataset[split][i:i+32]
+    for i in tqdm(range(0, len(dataset[split]), batch_size)):  # Process in batches
+        batch = dataset[split][i:i+batch_size]
         results = process_batch(batch)
         processed_data[split].extend(results)
 
@@ -101,7 +108,9 @@ dataset_dict = DatasetDict({
     'test': test_dataset
 })
 
+dataset_dict = dataset_dict.filter(lambda example: len(example['chars']) > 0)
+
 # Push to HuggingFace Hub
-dataset_dict.push_to_hub("AlienKevin/wiki-yue-long-multi")
+dataset_dict.push_to_hub("AlienKevin/lihkg-multi")
 
 print("Dataset uploaded successfully!")
