@@ -41,27 +41,31 @@ bpe_mappings = load_bpe_mappings('data/Cangjie5_SC_BPE.txt')
 class BertConfig:
     def __init__(
         self,
-        hidden_size: int = 312,
-        num_hidden_layers: int = 4,
-        num_attention_heads: int = 12,
+        embedding_size: int=128,
+        hidden_size: int = 256,
+        num_hidden_layers: int = 2,
+        num_attention_heads: int = 4,
         intermediate_size: int = 1248,
         hidden_act: str = "gelu",
         hidden_dropout_prob: float = 0.1,
         attention_probs_dropout_prob: float = 0.1,
-        max_position_embeddings: int = 200,
+        max_position_embeddings: int = 50,
         initializer_range: float = 0.02,
+        layer_norm_eps: float = 1e-12,
         **kwargs,  # unused
     ):
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.hidden_act = hidden_act
         self.hidden_dropout_prob = hidden_dropout_prob
         self.hidden_size = hidden_size
+        self.embedding_size = embedding_size
         self.initializer_range = initializer_range
         self.intermediate_size = intermediate_size
         self.max_position_embeddings = max_position_embeddings
         self.num_attention_heads = num_attention_heads
         self.num_hidden_layers = num_hidden_layers
-
+        self.layer_norm_eps = layer_norm_eps
+    
     @staticmethod
     def from_json(path: str) -> "BertConfig":
         with open(path, "r") as f:
@@ -97,7 +101,7 @@ class Segmenter(nn.Module):
             embedding_size = config.embedding_size
             output_size = config.hidden_sizes[-1]
         elif isinstance(config, BertConfig):
-            embedding_size = config.hidden_size
+            embedding_size = config.embedding_size
             output_size = config.hidden_size
         
         if char_embedding_path is None:
@@ -137,11 +141,12 @@ class Segmenter(nn.Module):
             self.relu = nn.ReLU()
             self.output = nn.Linear(output_size, len(vocab) if not tagset else len(tagset))
         elif isinstance(config, BertConfig):
-            self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+            self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.embedding_size)
 
-            self.embedding_layer_norm = nn.LayerNorm(config.hidden_size)
+            self.embedding_layer_norm = nn.LayerNorm(config.embedding_size)
             self.embedding_dropout = nn.Dropout(p=config.hidden_dropout_prob)
-
+            if config.embedding_size != config.hidden_size:
+                self.embedding_proj = nn.Linear(config.embedding_size, config.hidden_size)
             self.encoders = nn.TransformerEncoder(
                 encoder_layer=nn.TransformerEncoderLayer(
                     d_model=config.hidden_size,
@@ -149,6 +154,7 @@ class Segmenter(nn.Module):
                     dim_feedforward=config.intermediate_size,
                     dropout=config.hidden_dropout_prob,
                     activation=config.hidden_act,
+                    layer_norm_eps=config.layer_norm_eps,
                     batch_first=True,
                 ),
                 num_layers=config.num_hidden_layers,
@@ -269,6 +275,8 @@ class Segmenter(nn.Module):
             x = x + self.position_embeddings(position_ids).unsqueeze(0)
             x = self.embedding_layer_norm(x)
             x = self.embedding_dropout(x)
+            if hasattr(self, 'embedding_proj'):
+                x = self.embedding_proj(x)
             x = self.encoders(x)
 
         return self.output(x)
@@ -713,9 +721,9 @@ def main():
     parser.add_argument('--mode', type=str, choices=['train', 'infer', 'test'], required=True, help='Mode to run in')
     parser.add_argument('--model_path', type=str, help='Path to model')
     parser.add_argument('--config', type=str, choices=['conv', 'bert'], default='conv', help='Architecture to use')
-    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'hkcancor-multi', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'wiki-yue-long-multi', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
+    parser.add_argument('--train_dataset', type=str, choices=['rthk', 'genius', 'tte', 'cityu-seg', 'as-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'hkcancor', 'hkcancor-multi', 'lihkg-multi', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'wiki-yue-long-multi', 'genius-tagged', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged'],
                         help='Dataset to use for training')
-    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'hkcancor-multi', 'hkcancor', 'genius-tagged', 'wiki-yue-long', 'wiki-yue-long-multi', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
+    parser.add_argument('--test_dataset', type=str, choices=['as-seg', 'cityu-seg', 'msr-seg', 'pku-seg', 'genius-seg', 'ctb8', 'yue_and_zh', 'tinystories_yue', 'wiki-yue-long', 'hkcancor-multi', 'lihkg-multi', 'hkcancor', 'genius-tagged', 'wiki-yue-long', 'wiki-yue-long-multi', 'wiki-yue-long-tagged', 'lihkg-tagged', 'cc100-yue-tagged', 'ud_yue_hk', 'ud_zh_hk'],
                         help='Dataset to use for testing')
     parser.add_argument('--test_file', type=str, help='File to use for testing')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch size for training')
