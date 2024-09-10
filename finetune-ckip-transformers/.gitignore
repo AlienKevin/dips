@@ -15,6 +15,7 @@ electra_base_hkcancor_multi/
 electra_large_hkcancor_multi/
 albert_tiny_chinese_hkcancor_multi/
 bert_tiny_chinese_hkcancor_multi/
+electra_small_layers_6_multi_compressed/
 transformers/
 
 # C extensions
