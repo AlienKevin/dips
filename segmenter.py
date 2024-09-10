@@ -43,7 +43,7 @@ class BertConfig:
         self,
         embedding_size: int=128,
         hidden_size: int = 256,
-        num_hidden_layers: int = 2,
+        num_hidden_layers: int = 6,
         num_attention_heads: int = 4,
         intermediate_size: int = 1248,
         hidden_act: str = "gelu",
@@ -146,7 +146,7 @@ class Segmenter(nn.Module):
             self.embedding_layer_norm = nn.LayerNorm(config.embedding_size)
             self.embedding_dropout = nn.Dropout(p=config.hidden_dropout_prob)
             if config.embedding_size != config.hidden_size:
-                self.embedding_proj = nn.Linear(config.embedding_size, config.hidden_size)
+                self.embedding_project = nn.Linear(config.embedding_size, config.hidden_size)
             self.encoders = nn.TransformerEncoder(
                 encoder_layer=nn.TransformerEncoderLayer(
                     d_model=config.hidden_size,
@@ -167,7 +167,10 @@ class Segmenter(nn.Module):
             )
 
         if pretrained_model_path is not None:
-            pretrained_state_dict = torch.load(pretrained_model_path, map_location=device, weights_only=False)['state_dict']
+            if isinstance(config, ConvConfig):
+                pretrained_state_dict = torch.load(pretrained_model_path, map_location=device, weights_only=False)['state_dict']
+            elif isinstance(config, BertConfig):
+                pretrained_state_dict = torch.load(pretrained_model_path, map_location=device, weights_only=False)
             model_state_dict = self.state_dict()
             
             if tagset is None:
@@ -188,18 +191,137 @@ class Segmenter(nn.Module):
                             new_weight = torch.zeros_like(current_weight)
                             new_weight[:, :pretrained_weight.shape[1], :] = pretrained_weight
                             filtered_state_dict['conv_layers.0.weight'] = new_weight
+                    # Update the model's state dict with the filtered pretrained weights
+                    model_state_dict.update(filtered_state_dict)
+                    self.load_state_dict(model_state_dict)
+                    # if isinstance(config, ConvConfig):
+                    #     # Freeze the embedding layer
+                    #     self.embedding.weight.requires_grad = False
+                    #     print('Loaded pretrained model weights with frozen embedding layer')
+                    # else:
+                    print('Loaded pretrained model weights')
                 elif isinstance(config, BertConfig):
-                    filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict and 'output.3' not in k}
+                    # Load ELECTRA weights
+                    electra_state_dict = {k.replace('electra.', ''): v for k, v in pretrained_state_dict.items()}
+                    
+                    # Helper function to map ELECTRA keys to Segmenter keys
+                    def map_key(electra_key):
+                        if electra_key.startswith('embeddings.word_embeddings'):
+                            return 'embedding.weight'
+                        elif electra_key.startswith('embeddings.position_embeddings'):
+                            return 'position_embeddings.weight'
+                        elif electra_key == 'embeddings.LayerNorm.weight':
+                            return 'embedding_layer_norm.weight'
+                        elif electra_key == 'embeddings.LayerNorm.bias':
+                            return 'embedding_layer_norm.bias'
+                        elif electra_key == 'embeddings_project.weight':
+                            return 'embedding_project.weight'
+                        elif electra_key == 'embeddings_project.bias':
+                            return 'embedding_project.bias'
+                        elif electra_key.startswith('encoder.layer'):
+                            layer_num = int(electra_key.split('.')[2])
+                            if layer_num >= config.num_hidden_layers:
+                                return None  # Skip layers beyond config.num_hidden_layers
+                            electra_key = electra_key.removeprefix(f'encoder.layer.{layer_num}.')
+                            if electra_key == 'attention.self.query.weight':
+                                return f'encoders.layers.{layer_num}.self_attn.in_proj_weight.query'
+                            elif electra_key == 'attention.self.query.bias':
+                                return f'encoders.layers.{layer_num}.self_attn.in_proj_bias.query'
+                            elif electra_key == 'attention.self.key.weight':
+                                return f'encoders.layers.{layer_num}.self_attn.in_proj_weight.key'
+                            elif electra_key == 'attention.self.key.bias':
+                                return f'encoders.layers.{layer_num}.self_attn.in_proj_bias.key'
+                            elif electra_key == 'attention.self.value.weight':
+                                return f'encoders.layers.{layer_num}.self_attn.in_proj_weight.value'
+                            elif electra_key == 'attention.self.value.bias':
+                                return f'encoders.layers.{layer_num}.self_attn.in_proj_bias.value'
+                            elif electra_key == 'attention.output.dense.weight':
+                                return f'encoders.layers.{layer_num}.self_attn.out_proj.weight'
+                            elif electra_key == 'attention.output.dense.bias':
+                                return f'encoders.layers.{layer_num}.self_attn.out_proj.bias'
+                            elif electra_key == 'attention.output.LayerNorm.weight':
+                                return f'encoders.layers.{layer_num}.norm1.weight'
+                            elif electra_key == 'attention.output.LayerNorm.bias':
+                                return f'encoders.layers.{layer_num}.norm1.bias'
+                            elif electra_key == 'intermediate.dense.weight':
+                                return f'encoders.layers.{layer_num}.linear1.weight'
+                            elif electra_key == 'intermediate.dense.bias':
+                                return f'encoders.layers.{layer_num}.linear1.bias'
+                            elif electra_key == 'output.dense.weight':
+                                return f'encoders.layers.{layer_num}.linear2.weight'
+                            elif electra_key == 'output.dense.bias':
+                                return f'encoders.layers.{layer_num}.linear2.bias'
+                            elif electra_key == 'output.LayerNorm.weight':
+                                return f'encoders.layers.{layer_num}.norm2.weight'
+                            elif electra_key == 'output.LayerNorm.bias':
+                                return f'encoders.layers.{layer_num}.norm2.bias'
+                        return None
 
-                # Update the model's state dict with the filtered pretrained weights
-                model_state_dict.update(filtered_state_dict)
-                self.load_state_dict(model_state_dict)
-                # if isinstance(config, ConvConfig):
-                #     # Freeze the embedding layer
-                #     self.embedding.weight.requires_grad = False
-                #     print('Loaded pretrained model weights with frozen embedding layer')
-                # else:
-                print('Loaded pretrained model weights')
+                    # Process word embeddings
+                    electra_embed = electra_state_dict['embeddings.word_embeddings.weight']
+                    # Load ELECTRA vocabulary
+                    electra_vocab = []
+                    with open(os.path.join(os.path.dirname(pretrained_model_path), 'vocab.txt'), 'r', encoding='utf-8') as f:
+                        for line in f:
+                            electra_vocab.append(line.strip())
+                    
+                    normalized_embeddings = {}
+                    for i, word in enumerate(electra_vocab):
+                        if not word.startswith('##'):
+                            normalized_word = word.lower()
+                            if normalized_word in normalized_embeddings:
+                                normalized_embeddings[normalized_word].append(electra_embed[i])
+                            else:
+                                normalized_embeddings[normalized_word] = [electra_embed[i]]
+                    
+                    for word in normalized_embeddings:
+                        normalized_embeddings[word] = torch.stack(normalized_embeddings[word]).mean(dim=0)
+                    
+                    new_embedding = torch.nn.Embedding(len(self.vocab), config.embedding_size)
+                    with torch.no_grad():
+                        for word, idx in self.vocab.token2id_map.items():
+                            if word in normalized_embeddings:
+                                new_embedding.weight[idx] = normalized_embeddings[word]
+                    
+                    model_state_dict['embedding.weight'] = new_embedding.weight
+
+                    # Map and load other weights
+                    for electra_key, electra_value in electra_state_dict.items():
+                        segmenter_key = map_key(electra_key)
+                        if segmenter_key:
+                            if segmenter_key == 'embedding.weight':
+                                continue
+                            if 'in_proj_weight' in segmenter_key:
+                                # Combine query, key, value weights
+                                if 'query' in electra_key:
+                                    q_weight = electra_value
+                                elif 'key' in electra_key:
+                                    k_weight = electra_value
+                                elif 'value' in electra_key:
+                                    v_weight = electra_value
+                                    # Concatenate q, k, v weights
+                                    combined_weight = torch.cat((q_weight, k_weight, v_weight), dim=0)
+                                    # Remove everything after the last period in segmenter_key
+                                    segmenter_key = segmenter_key.rsplit('.', 1)[0]
+                                    model_state_dict[segmenter_key] = combined_weight
+                            elif 'in_proj_bias' in segmenter_key:
+                                # Combine query, key, value biases
+                                if 'query' in electra_key:
+                                    q_bias = electra_value
+                                elif 'key' in electra_key:
+                                    k_bias = electra_value
+                                elif 'value' in electra_key:
+                                    v_bias = electra_value
+                                    # Concatenate q, k, v biases
+                                    combined_bias = torch.cat((q_bias, k_bias, v_bias), dim=0)
+                                    # Remove everything after the last period in segmenter_key
+                                    segmenter_key = segmenter_key.rsplit('.', 1)[0]
+                                    model_state_dict[segmenter_key] = combined_bias
+                            elif electra_value.shape == model_state_dict[segmenter_key].shape:
+                                model_state_dict[segmenter_key] = electra_value
+                    
+                    self.load_state_dict(model_state_dict)
+                    print(f'Loaded ELECTRA pretrained model weights for {config.num_hidden_layers} layers')
 
     def _build_trie(self, lexicon: list[str]):
         import pygtrie
@@ -275,8 +397,8 @@ class Segmenter(nn.Module):
             x = x + self.position_embeddings(position_ids).unsqueeze(0)
             x = self.embedding_layer_norm(x)
             x = self.embedding_dropout(x)
-            if hasattr(self, 'embedding_proj'):
-                x = self.embedding_proj(x)
+            if hasattr(self, 'embedding_project'):
+                x = self.embedding_project(x)
             x = self.encoders(x)
 
         return self.output(x)
@@ -600,7 +722,7 @@ def load_train_dataset(args):
         raise ValueError("Invalid dataset choice")
     
     vocab = None
-    if args.pretrained_model_path:
+    if args.pretrained_model_path and isinstance(args.config, ConvConfig):
         # Load the vocabulary from the pretrained model
         pretrained_state_dict = torch.load(args.pretrained_model_path, map_location='cpu', weights_only=False)
         vocab = Vocab(pretrained_state_dict['vocab'])
