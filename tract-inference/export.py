@@ -2,6 +2,7 @@ from pathlib import Path
 import transformers
 from transformers.onnx import FeaturesManager
 from transformers import AutoTokenizer, AutoModelForTokenClassification
+import torch
 import os
 
 output_dir = "./model"
@@ -11,7 +12,8 @@ model_path = Path(output_dir)/"model.onnx"
 # load model and tokenizer
 model_id = "../finetune-ckip-transformers/electra_small_layers_6_multi_compressed"
 feature = "token-classification"
-model = AutoModelForTokenClassification.from_pretrained(model_id)
+# Must specify torch_dtype=torch.float16 to load the fp16 model as fp16 in memory
+model = AutoModelForTokenClassification.from_pretrained(model_id, torch_dtype=torch.float16)
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 # load config
