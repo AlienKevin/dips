@@ -146,8 +146,11 @@ if __name__ == "__main__":
     # model_name = "finetune-ckip-transformers/electra_small_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/electra_small_layers_6_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/electra_small_layers_5_hkcancor_multi"
-    model_name = "finetune-ckip-transformers/electra_small_layers_4_hkcancor_multi"
+    # model_name = "finetune-ckip-transformers/electra_small_layers_4_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/electra_small_layers_3_hkcancor_multi"
+
+    model_name = "finetune-ckip-transformers/electra_small_layers_6_multi"
+
     # model_name = "finetune-ckip-transformers/electra_base_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/electra_large_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/albert_tiny_chinese_hkcancor_multi"
