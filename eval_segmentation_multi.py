@@ -144,8 +144,12 @@ def evaluate_segmentation(model_name, dataset_names):
 if __name__ == "__main__":
     # model_name = "toastynews/electra-hongkongese-small-hkt-ws"
     # model_name = "finetune-ckip-transformers/electra_small_hkcancor_multi"
+    # model_name = "finetune-ckip-transformers/electra_small_layers_6_hkcancor_multi"
+    # model_name = "finetune-ckip-transformers/electra_small_layers_5_hkcancor_multi"
+    model_name = "finetune-ckip-transformers/electra_small_layers_4_hkcancor_multi"
+    # model_name = "finetune-ckip-transformers/electra_small_layers_3_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/electra_base_hkcancor_multi"
-    model_name = "finetune-ckip-transformers/electra_large_hkcancor_multi"
+    # model_name = "finetune-ckip-transformers/electra_large_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/albert_tiny_chinese_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/bert_tiny_chinese_hkcancor_multi"
     dataset_names = ["AlienKevin/ud_yue_hk", "AlienKevin/ud_zh_hk", "AlienKevin/cityu-seg", "AlienKevin/as-seg"]

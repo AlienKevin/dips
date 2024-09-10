@@ -103,6 +103,94 @@ Token Precision: 0.8933
 Token Recall: 0.9175
 
 
+electra-small-layers-6-hongkongese-hkcancor-multi
+
+ud_yue_hk
+
+Token F1 Score: 0.9462
+Token Precision: 0.9342
+Token Recall: 0.9584
+
+ud_zh_hk
+
+Token F1 Score: 0.9267
+Token Precision: 0.9176
+Token Recall: 0.9359
+
+cityu-seg
+
+Token F1 Score: 0.8979
+Token Precision: 0.8839
+Token Recall: 0.9124
+
+as-seg
+
+Token F1 Score: 0.8874
+Token Precision: 0.8749
+Token Recall: 0.9004
+
+
+electra-small-layers-5-hongkongese-hkcancor-multi
+
+
+ud_yue_hk
+
+Token F1 Score: 0.9380
+Token Precision: 0.9248
+Token Recall: 0.9516
+
+ud_zh_hk
+
+Token F1 Score: 0.9142
+Token Precision: 0.9087
+Token Recall: 0.9198
+
+cityu-seg
+
+Token F1 Score: 0.8747
+Token Precision: 0.8567
+Token Recall: 0.8935
+
+as-seg
+
+Token F1 Score: 0.8670
+Token Precision: 0.8506
+Token Recall: 0.8840
+
+
+electra-small-layers-4-hongkongese-hkcancor-multi
+
+
+
+
+electra-small-layers-3-hongkongese-hkcancor-multi
+
+
+ud_yue_hk
+
+Token F1 Score: 0.9015
+Token Precision: 0.8827
+Token Recall: 0.9212
+
+ud_zh_hk
+
+Token F1 Score: 0.8254
+Token Precision: 0.8158
+Token Recall: 0.8351
+
+cityu-seg
+
+Token F1 Score: 0.6951
+Token Precision: 0.6748
+Token Recall: 0.7166
+
+as-seg
+
+Token F1 Score: 0.7193
+Token Precision: 0.6965
+Token Recall: 0.7435
+
+
 albert_tiny_chinese_hkcancor_multi
 
 ud_yue_hk

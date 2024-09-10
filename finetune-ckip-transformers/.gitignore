@@ -2,9 +2,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
+electra_small/
 electra_small_hkcancor/
 electra_small_hkcancor_multi_dual/
 electra_small_hkcancor_multi/
+electra_small_layers_3_hkcancor_multi/
+electra_small_layers_4_hkcancor_multi/
+electra_small_layers_5_hkcancor_multi/
+electra_small_layers_6_hkcancor_multi/
 electra_base_hkcancor_multi/
 electra_large_hkcancor_multi/
 albert_tiny_chinese_hkcancor_multi/
