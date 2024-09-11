@@ -169,8 +169,7 @@ if __name__ == "__main__":
             vocab[line.strip()] = i
 
     def cut(text):
-        text = text.lower()
-        inputs = torch.tensor([vocab['[CLS]']] + [vocab[char] if char in vocab else vocab['[UNK]'] for char in text] + [vocab['[SEP]']]).unsqueeze(0)
+        inputs = torch.tensor([vocab['[CLS]']] + [vocab[char] if char in vocab else vocab['[UNK]'] for char in text.lower()] + [vocab['[SEP]']]).unsqueeze(0)
         with torch.no_grad():
             # squeeze removes the first singleton batch dimension
             # [1, -1] removes the first [CLS] and last [SEP] tokens
