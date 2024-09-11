@@ -1,4 +1,3 @@
-from transformers import pipeline
 from datasets import load_dataset
 from tqdm import tqdm
 from spacy.vocab import Vocab
@@ -155,6 +154,7 @@ if __name__ == "__main__":
     # model_name = "finetune-ckip-transformers/bert_tiny_chinese_hkcancor_multi"
     dataset_names = ["AlienKevin/ud_yue_hk", "AlienKevin/ud_zh_hk", "AlienKevin/cityu-seg", "AlienKevin/as-seg"]
 
+    # from transformers import pipeline
     # cut = pipeline("token-classification", model=model_name, device="cpu")
     
     from scratch_inference.np_model import Electra

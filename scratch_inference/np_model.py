@@ -1,5 +1,5 @@
-import numpy as np
-
+# import numpy as np
+import jax.numpy as np
 
 EMBEDDING_SIZE = 128
 HIDDEN_SIZE = 256
@@ -56,7 +56,7 @@ class MultiHeadAttention:
         v = self.transpose_for_scores(self.value(x))
 
         attention_outputs = softmax(q @ k.transpose(0, 2, 1) / np.sqrt(ATTENTION_HEAD_SIZE)) @ v
-        attention_outputs = np.ascontiguousarray(attention_outputs.transpose(1, 0, 2))
+        attention_outputs = attention_outputs.transpose(1, 0, 2)
         output_shape = attention_outputs.shape[:-2] + (HIDDEN_SIZE,)
         attention_outputs = attention_outputs.reshape(output_shape)
         attention_outputs = self.output(attention_outputs)
