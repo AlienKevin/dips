@@ -172,6 +172,18 @@ Token F1 Score: 0.9402
 Token Precision: 0.9304
 Token Recall: 0.9502
 
+cityu-seg
+
+Token F1 Score: 0.9234
+Token Precision: 0.9107
+Token Recall: 0.9365
+
+as-seg
+
+Token F1 Score: 0.9134
+Token Precision: 0.8995
+Token Recall: 0.9277
+
 
 electra-small-layers-6-hongkongese-hkcancor-multi
 
