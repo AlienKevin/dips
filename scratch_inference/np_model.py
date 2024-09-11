@@ -123,7 +123,7 @@ class Electra:
         with open(Path(model_path)/"vocab.txt", "r") as f:
             vocab = f.read().splitlines()
 
-        self.vocab = dict(enumerate(vocab))
+        self.vocab = {token: i for i, token in enumerate(vocab)}
 
         self.word_embeddings = state_dict["embeddings.word_embeddings.weight"]
         self.position_embeddings = state_dict["embeddings.position_embeddings.weight"]
