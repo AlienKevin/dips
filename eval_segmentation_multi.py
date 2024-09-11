@@ -152,15 +152,35 @@ if __name__ == "__main__":
     # model_name = "finetune-ckip-transformers/electra_large_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/albert_tiny_chinese_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/bert_tiny_chinese_hkcancor_multi"
+
     dataset_names = ["AlienKevin/ud_yue_hk", "AlienKevin/ud_zh_hk", "AlienKevin/cityu-seg", "AlienKevin/as-seg"]
 
     # from transformers import pipeline
     # cut = pipeline("token-classification", model=model_name, device="cpu")
-    
-    from scratch_inference.np_model import Electra
-    model = Electra()
-    model.load("finetune-ckip-transformers/electra_small_layers_6_multi_compressed")
-    
-    cut = lambda text: model.cut(text)
+
+    from transformers import AutoModelForTokenClassification, AutoTokenizer
+    import torch
+    from pathlib import Path
+    model = AutoModelForTokenClassification.from_pretrained(model_name, torch_dtype=torch.float16).to('cpu')
+    vocab_path = Path(model_name) / "vocab.txt"
+    vocab = {}
+    with open(vocab_path, 'r', encoding='utf-8') as f:
+        for i, line in enumerate(f):
+            vocab[line.strip()] = i
+
+    def cut(text):
+        text = text.lower()
+        inputs = torch.tensor([vocab['[CLS]']] + [vocab[char] if char in vocab else vocab['[UNK]'] for char in text] + [vocab['[SEP]']]).unsqueeze(0)
+        with torch.no_grad():
+            # squeeze removes the first singleton batch dimension
+            # [1, -1] removes the first [CLS] and last [SEP] tokens
+            logits = model(input_ids=inputs).logits.squeeze()[1:-1]
+            predictions = logits.argmax(dim=-1).tolist()
+        return list({"word": token, "entity": "DIPS"[prediction]} for token, prediction in zip(text, predictions))
+
+    # from scratch_inference.flax_model import Electra
+    # model = Electra()
+    # model.load("finetune-ckip-transformers/electra_small_layers_6_multi_compressed")
+    # cut = lambda text: model.cut(text)
 
     evaluate_segmentation(cut, dataset_names)
