@@ -6,7 +6,7 @@ HIDDEN_SIZE = 256
 INTERMEDIATE_SIZE = 1024
 NUM_ATTENTION_HEADS = 4
 NUM_HIDDEN_LAYERS = 6
-
+LAYER_NORM_EPS = 1e-12
 
 class Linear:
     weight: np.ndarray
@@ -25,7 +25,7 @@ class LayerNorm():
     bias: np.ndarray
     eps: float
 
-    def __init__(self, weight: np.ndarray, bias: np.ndarray, eps: float):
+    def __init__(self, weight: np.ndarray, bias: np.ndarray, eps: float=LAYER_NORM_EPS):
         self.weight = weight
         self.bias = bias
         self.eps = eps
@@ -111,94 +111,74 @@ class Electra:
 
 
     def load(self, model_path):
-        import torch
-        from transformers import ElectraForTokenClassification, ElectraTokenizer
+        from pathlib import Path
+        from safetensors import safe_open
 
-        model = ElectraForTokenClassification.from_pretrained(model_path, torch_dtype=torch.float16)
-        tokenizer = ElectraTokenizer.from_pretrained(model_path)
-        
-        # # Print the layers in the model
-        # print("Layers in the ELECTRA model:")
-        # for name, module in model.named_modules():
-        #     if len(list(module.children())) == 0:  # Only print leaf modules
-        #         print(name)
+        state_dict = {}
 
-        self.vocab = dict(tokenizer.vocab)
+        with safe_open(Path(model_path)/"model.safetensors", framework="np") as f:
+            for key in f.keys():
+                state_dict[key.removeprefix('electra.')] = f.get_tensor(key)
 
-        layers = [EncoderLayer() for _ in range(NUM_HIDDEN_LAYERS)]
+        with open(Path(model_path)/"vocab.txt", "r") as f:
+            vocab = f.read().splitlines()
 
-        for name, module in model.named_modules():
-            name = name.removeprefix("electra.")
-            if name == "embeddings.word_embeddings":
-                self.word_embeddings = module.weight.detach().numpy()
-            elif name == "embeddings.position_embeddings":
-                self.position_embeddings = module.weight.detach().numpy()
-            elif name == "embeddings.token_type_embeddings":
-                self.token_type_embeddings = module.weight.detach().numpy()
-            elif name == "embeddings.LayerNorm":
-                self.embeddings_layer_norm = LayerNorm(
-                    weight=module.weight.detach().numpy(),
-                    bias=module.bias.detach().numpy(),
-                    eps=module.eps
-                )
-            elif name == "embeddings_project":
-                self.embeddings_project = Linear(
-                    weight=module.weight.detach().numpy(),
-                    bias=module.bias.detach().numpy()
-                )
-            elif name.startswith("encoder.layer."):
-                layer_index = int(name.split(".")[2])
-                layer = layers[layer_index]
-                if "attention.self.query" in name:
-                    layer.attention = MultiHeadAttention()
-                    layer.attention.query = Linear(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy()
-                    )
-                elif "attention.self.key" in name:
-                    layer.attention.key = Linear(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy()
-                    )
-                elif "attention.self.value" in name:
-                    layer.attention.value = Linear(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy()
-                    )
-                elif "attention.output.dense" in name:
-                    layer.attention.output = Linear(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy()
-                    )
-                elif "attention.output.LayerNorm" in name:
-                    layer.attention.output_ln = LayerNorm(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy(),
-                        eps=module.eps
-                    )
-                elif "intermediate.dense" in name:
-                    layer.intermediate = Linear(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy()
-                    )
-                elif "output.dense" in name:
-                    layer.output = Linear(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy()
-                    )
-                elif "output.LayerNorm" in name:
-                    layer.output_ln = LayerNorm(
-                        weight=module.weight.detach().numpy(),
-                        bias=module.bias.detach().numpy(),
-                        eps=module.eps
-                    )
-            elif name == "classifier":
-                self.classifier = Linear(
-                    weight=module.weight.detach().numpy(),
-                    bias=module.bias.detach().numpy()
-                )
-        
-        self.encoder = layers
+        self.vocab = dict(enumerate(vocab))
+
+        self.word_embeddings = state_dict["embeddings.word_embeddings.weight"]
+        self.position_embeddings = state_dict["embeddings.position_embeddings.weight"]
+        self.token_type_embeddings = state_dict["embeddings.token_type_embeddings.weight"]
+        self.embeddings_layer_norm = LayerNorm(
+            weight=state_dict["embeddings.LayerNorm.weight"],
+            bias=state_dict["embeddings.LayerNorm.bias"],
+        )
+        self.embeddings_project = Linear(
+            weight=state_dict["embeddings_project.weight"],
+            bias=state_dict["embeddings_project.bias"]
+        )
+
+        self.encoder = []
+
+        for layer_index in range(NUM_HIDDEN_LAYERS):
+            layer = EncoderLayer()
+            layer.attention = MultiHeadAttention()
+            layer.attention.query = Linear(
+                weight=state_dict[f"encoder.layer.{layer_index}.attention.self.query.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.attention.self.query.bias"]
+            )
+            layer.attention.key = Linear(
+                weight=state_dict[f"encoder.layer.{layer_index}.attention.self.key.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.attention.self.key.bias"]
+            )
+            layer.attention.value = Linear(
+                weight=state_dict[f"encoder.layer.{layer_index}.attention.self.value.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.attention.self.value.bias"]
+            )
+            layer.attention.output = Linear(
+                weight=state_dict[f"encoder.layer.{layer_index}.attention.output.dense.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.attention.output.dense.bias"]
+            )
+            layer.attention.output_ln = LayerNorm(
+                weight=state_dict[f"encoder.layer.{layer_index}.attention.output.LayerNorm.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.attention.output.LayerNorm.bias"],
+            )
+            layer.intermediate = Linear(
+                weight=state_dict[f"encoder.layer.{layer_index}.intermediate.dense.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.intermediate.dense.bias"]
+            )
+            layer.output = Linear(
+                weight=state_dict[f"encoder.layer.{layer_index}.output.dense.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.output.dense.bias"]
+            )
+            layer.output_ln = LayerNorm(
+                weight=state_dict[f"encoder.layer.{layer_index}.output.LayerNorm.weight"],
+                bias=state_dict[f"encoder.layer.{layer_index}.output.LayerNorm.bias"],
+            )
+            self.classifier = Linear(
+                weight=state_dict["classifier.weight"],
+                bias=state_dict["classifier.bias"]
+            )
+            self.encoder.append(layer)
 
 
 def gelu(x, approximate=True):

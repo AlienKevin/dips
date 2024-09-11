@@ -1,0 +1,6 @@
+[package]
+name = "scratch_inference"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
