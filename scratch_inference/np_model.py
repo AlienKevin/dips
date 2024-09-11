@@ -5,6 +5,7 @@ EMBEDDING_SIZE = 128
 HIDDEN_SIZE = 256
 INTERMEDIATE_SIZE = 1024
 NUM_ATTENTION_HEADS = 4
+ATTENTION_HEAD_SIZE = HIDDEN_SIZE // NUM_ATTENTION_HEADS
 NUM_HIDDEN_LAYERS = 6
 LAYER_NORM_EPS = 1e-12
 
@@ -44,16 +45,20 @@ class MultiHeadAttention:
     output: Linear
     output_ln: LayerNorm
 
-    def __call__(self, x):
-        query_heads = np.split(self.query(x), NUM_ATTENTION_HEADS, axis=-1)
-        key_heads = np.split(self.key(x), NUM_ATTENTION_HEADS, axis=-1)
-        value_heads = np.split(self.value(x), NUM_ATTENTION_HEADS, axis=-1)
+    def transpose_for_scores(self, x):
+        new_x_shape = x.shape[:-1] + (NUM_ATTENTION_HEADS, ATTENTION_HEAD_SIZE)
+        x = x.reshape(new_x_shape)
+        return x.transpose(1, 0, 2)
 
-        attention_outputs = [
-            softmax(q @ k.T / np.sqrt(q.shape[-1])) @ v
-            for q, k, v in zip(query_heads, key_heads, value_heads)
-        ]
-        attention_outputs = np.concatenate(attention_outputs, axis=-1)
+    def __call__(self, x):
+        q = self.transpose_for_scores(self.query(x))
+        k = self.transpose_for_scores(self.key(x))
+        v = self.transpose_for_scores(self.value(x))
+
+        attention_outputs = softmax(q @ k.transpose(0, 2, 1) / np.sqrt(ATTENTION_HEAD_SIZE)) @ v
+        attention_outputs = np.ascontiguousarray(attention_outputs.transpose(1, 0, 2))
+        output_shape = attention_outputs.shape[:-2] + (HIDDEN_SIZE,)
+        attention_outputs = attention_outputs.reshape(output_shape)
         attention_outputs = self.output(attention_outputs)
         attention_outputs = self.output_ln(attention_outputs + x)
         return attention_outputs
