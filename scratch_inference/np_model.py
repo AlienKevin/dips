@@ -95,6 +95,21 @@ class Electra:
         x = self.classifier(x)
         return x
 
+    def tokenize(self, text: str):
+        text = ''.join(text.split())
+        tokens = list(text)
+        return [self.vocab['[CLS]']] +\
+            [self.vocab[token] if token in self.vocab else self.vocab['[UNK]'] for token in tokens] +\
+            [self.vocab['[SEP]']]
+
+    def cut(self, text: str):
+        tokens = self.tokenize(text)
+        token_type_ids = np.array([0] * len(tokens))
+        out_logits = self(tokens, token_type_ids)[1:-1]
+        predictions = np.argmax(out_logits, axis=-1)
+        return list({'word': token, 'entity': 'DIPS'[pred]} for token, pred in zip(list(''.join(text.split())), predictions))
+
+
     def load(self, model_path):
         import torch
         from transformers import ElectraForTokenClassification, ElectraTokenizer
@@ -182,8 +197,6 @@ class Electra:
                     weight=module.weight.detach().numpy(),
                     bias=module.bias.detach().numpy()
                 )
-            else:
-                print(f"Skipping layer: {name}")
         
         self.encoder = layers
 

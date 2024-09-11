@@ -285,6 +285,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dips"
+version = "0.0.0"
+dependencies = [
+ "ndarray",
+ "tokenizers",
+ "tract-onnx",
+]
+
+[[package]]
 name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1345,15 +1354,6 @@ dependencies = [
  "derive-new",
  "log",
  "tract-core",
-]
-
-[[package]]
-name = "tract-inference"
-version = "0.0.0"
-dependencies = [
- "ndarray",
- "tokenizers",
- "tract-onnx",
 ]
 
 [[package]]

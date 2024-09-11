@@ -16,10 +16,7 @@ def load_and_preprocess_dataset(dataset_name):
         preprocessed_data.append((text, tokens))
     return preprocessed_data
 
-def evaluate_segmentation(model_name, dataset_names):
-    # Load the model
-    nlp = pipeline("token-classification", model=model_name, device="cpu")
-
+def evaluate_segmentation(cut, dataset_names):
     for dataset_name in dataset_names:
         print(f"Evaluating on {dataset_name}")
         
@@ -32,7 +29,7 @@ def evaluate_segmentation(model_name, dataset_names):
 
         for text, reference in tqdm(test_data):
             # Get model predictions
-            predictions = nlp(text)
+            predictions = cut(text)
             
             # Fine segmentation
             hypothesis_fine = []
@@ -157,4 +154,13 @@ if __name__ == "__main__":
     # model_name = "finetune-ckip-transformers/albert_tiny_chinese_hkcancor_multi"
     # model_name = "finetune-ckip-transformers/bert_tiny_chinese_hkcancor_multi"
     dataset_names = ["AlienKevin/ud_yue_hk", "AlienKevin/ud_zh_hk", "AlienKevin/cityu-seg", "AlienKevin/as-seg"]
-    evaluate_segmentation(model_name, dataset_names)
+
+    # cut = pipeline("token-classification", model=model_name, device="cpu")
+    
+    from scratch_inference.np_model import Electra
+    model = Electra()
+    model.load("finetune-ckip-transformers/electra_small_layers_6_multi_compressed")
+    
+    cut = lambda text: model.cut(text)
+
+    evaluate_segmentation(cut, dataset_names)

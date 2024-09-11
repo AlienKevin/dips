@@ -157,6 +157,22 @@ Token Precision: 0.9025
 Token Recall: 0.9295
 
 
+electra-small-layers-6-hongkongese-multi-compressed-numpy
+
+
+ud_yue_hk
+
+Token F1 Score: 0.9578
+Token Precision: 0.9477
+Token Recall: 0.9680
+
+ud_zh_hk
+
+Token F1 Score: 0.9402
+Token Precision: 0.9304
+Token Recall: 0.9502
+
+
 electra-small-layers-6-hongkongese-hkcancor-multi
 
 ud_yue_hk
@@ -210,11 +226,6 @@ as-seg
 Token F1 Score: 0.8670
 Token Precision: 0.8506
 Token Recall: 0.8840
-
-
-electra-small-layers-4-hongkongese-hkcancor-multi
-
-
 
 
 electra-small-layers-3-hongkongese-hkcancor-multi
