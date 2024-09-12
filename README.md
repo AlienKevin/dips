@@ -130,27 +130,138 @@ Token Precision: 0.9042
 Token Recall: 0.9310
 
 
+
+electra-small-layers-6-hongkongese-multi-compressed-ggml-f32
+
+ud_yue_hk (164.91it/s)
+
+Token F1 Score: 0.9578
+Token Precision: 0.9479
+Token Recall: 0.9679
+
+ud_zh_hk (234.52it/s)
+
+Token F1 Score: 0.9403
+Token Precision: 0.9306
+Token Recall: 0.9502
+
+cityu-seg (139.53it/s)
+
+Token F1 Score: 0.9237
+Token Precision: 0.9109
+Token Recall: 0.9369
+
+as-seg (159.26it/s)
+
+Token F1 Score: 0.9137
+Token Precision: 0.8998
+Token Recall: 0.9281
+
+
+electra-small-layers-6-hongkongese-multi-compressed-ggml-q8_0
+
+ud_yue_hk (277.27it/s)
+
+Token F1 Score: 0.9578
+Token Precision: 0.9479
+Token Recall: 0.9678
+
+ud_zh_hk (195.79it/s)
+
+Token F1 Score: 0.9403
+Token Precision: 0.9306
+Token Recall: 0.9501
+
+cityu-seg (85.64it/s)
+
+Token F1 Score: 0.9238
+Token Precision: 0.9109
+Token Recall: 0.9371
+
+as-seg (230.51it/s)
+
+Token F1 Score: 0.9136
+Token Precision: 0.8996
+Token Recall: 0.9280
+
+
+electra-small-layers-6-hongkongese-multi-compressed-ggml-q4_1
+
+
+ud_yue_hk (00:05)
+
+Token F1 Score: 0.9568
+Token Precision: 0.9460
+Token Recall: 0.9679
+
+ud_zh_hk (00:04)
+
+Token F1 Score: 0.9378
+Token Precision: 0.9267
+Token Recall: 0.9492
+
+cityu-seg (00:12)
+
+Token F1 Score: 0.9195
+Token Precision: 0.9048
+Token Recall: 0.9347
+
+as-seg (01:07)
+
+Token F1 Score: 0.9102
+Token Precision: 0.8948
+Token Recall: 0.9261
+
+
+electra-small-layers-6-hongkongese-multi-compressed-ggml-q4_0
+
+
+ud_yue_hk (00:05)
+
+Token F1 Score: 0.9560
+Token Precision: 0.9446
+Token Recall: 0.9678
+
+ud_zh_hk (00:03)
+
+Token F1 Score: 0.9382
+Token Precision: 0.9262
+Token Recall: 0.9506
+
+cityu-seg (00:11)
+
+Token F1 Score: 0.9205
+Token Precision: 0.9051
+Token Recall: 0.9365
+
+as-seg (01:20)
+
+Token F1 Score: 0.9093
+Token Precision: 0.8919
+Token Recall: 0.9273
+
+
 electra-small-layers-6-hongkongese-multi-compressed
 
-ud_yue_hk
+ud_yue_hk (00:07)
 
 Token F1 Score: 0.9593
 Token Precision: 0.9500
 Token Recall: 0.9689
 
-ud_zh_hk
+ud_zh_hk (00:06)
 
 Token F1 Score: 0.9411
 Token Precision: 0.9321
 Token Recall: 0.9504
 
-cityu-seg
+cityu-seg (00:16)
 
 Token F1 Score: 0.9229
 Token Precision: 0.9098
 Token Recall: 0.9364
 
-as-seg
+as-seg (01:35)
 
 Token F1 Score: 0.9158
 Token Precision: 0.9025
