@@ -126,22 +126,26 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "\n");
 
     // create a batch
-    const int n_embd = bert_n_embd(bctx);
     bert_batch batch = { tokens };
 
-    // run the embedding
-    std::vector<float> embed(batch.size()*n_embd);
-    bert_forward_batch(bctx, batch, embed.data(), options.normalize, options.n_threads);
+    // calculate logits
+    std::vector<float> logits(tokens.size()*4);
+    bert_forward_batch(bctx, batch, logits.data(), options.normalize, options.n_threads);
 
     int64_t t_end_us = ggml_time_us();
     int64_t t_eval_us = t_end_us - t_mid_us;
 
-    printf("[ ");
-    for (int i = 0; i < n_embd; i++) {
-        const char * sep = (i == n_embd - 1) ? "" : ",";
-        printf("%1.4f%s ",embed[i], sep);
+    // Print the logits in rows of length 128
+    fprintf(stderr, "Logits:\n");
+    for (size_t i = 0; i < logits.size(); i++) {
+        fprintf(stderr, "%8.4f", logits[i]);
+        if ((i + 1) % 4 == 0 || i == logits.size() - 1) {
+            fprintf(stderr, "\n");
+        } else {
+            fprintf(stderr, " ");
+        }
     }
-    printf("]\n");
+    fprintf(stderr, "\n");
 
     // report timing
     {

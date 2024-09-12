@@ -2,7 +2,7 @@ import sys
 import torch
 
 from gguf import GGUFWriter, GGMLQuantizationType
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModelForTokenClassification, AutoTokenizer
 
 KEY_PAD_ID = 'tokenizer.ggml.padding_token_id'
 KEY_UNK_ID = 'tokenizer.ggml.unknown_token_id'
@@ -22,7 +22,7 @@ def convert_hf(repo_id, output_path, float_type='f16'):
 
     # load tokenizer and model
     vocab = AutoTokenizer.from_pretrained(repo_id)
-    model = AutoModel.from_pretrained(repo_id)
+    model = AutoModelForTokenClassification.from_pretrained(repo_id)
     config = model.config
 
     # get token list
@@ -89,6 +89,7 @@ def convert_hf(repo_id, output_path, float_type='f16'):
     # write tensors
     print('TENSORS')
     for name, data in model.state_dict().items():
+        name = name.removeprefix('electra.')
         # get correct dtype
         if 'LayerNorm' in name or 'bias' in name:
             dtype = torch.float32

@@ -118,6 +118,9 @@ struct bert_model {
     struct ggml_tensor *ln_e_b;
 
     std::vector<bert_layer> layers;
+
+    struct ggml_tensor *classifier_w;
+    struct ggml_tensor *classifier_b;
 };
 
 struct bert_ctx {

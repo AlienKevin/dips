@@ -554,6 +554,10 @@ struct bert_ctx * bert_load_from_file(const char *fname, bool use_cpu) {
             layer.ln_out_w = get_tensor(new_bert->ctx_data, pre + "output.LayerNorm.weight");
             layer.ln_out_b = get_tensor(new_bert->ctx_data, pre + "output.LayerNorm.bias");
         }
+
+        // classifier
+        model.classifier_w = get_tensor(new_bert->ctx_data, "classifier.weight");
+        model.classifier_b = get_tensor(new_bert->ctx_data, "classifier.bias");
     }
 
     // free metadata
@@ -683,13 +687,11 @@ ggml_cgraph * bert_build_graph(bert_ctx * ctx, bert_batch batch, bool normalize)
     struct ggml_tensor * token_types = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, cur_max_len * n_batch_size);
     struct ggml_tensor * pad_mask = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, 1, cur_max_len, 1, n_batch_size);
     struct ggml_tensor * positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, cur_max_len * n_batch_size);
-    struct ggml_tensor * sum = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, cur_max_len, 1, n_batch_size); // the avg pooler
     struct ggml_tensor * minus_one = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1); // for attention mask
     ggml_allocr_alloc(ctx->compute_alloc, token_layer);
     ggml_allocr_alloc(ctx->compute_alloc, token_types);
     ggml_allocr_alloc(ctx->compute_alloc, pad_mask);
     ggml_allocr_alloc(ctx->compute_alloc, positions);
-    ggml_allocr_alloc(ctx->compute_alloc, sum);
     ggml_allocr_alloc(ctx->compute_alloc, minus_one);
 
     // avoid writing input embeddings in memory measure mode
@@ -698,7 +700,6 @@ ggml_cgraph * bert_build_graph(bert_ctx * ctx, bert_batch batch, bool normalize)
         int32_t * token_types_data = (int32_t*)malloc(ggml_nbytes(token_types));
         float * pad_mask_data = (float*)malloc(ggml_nbytes(pad_mask));
         int32_t * pos_data = (int32_t*)malloc(ggml_nbytes(positions));
-        float * sum_data = (float*)malloc(ggml_nbytes(sum));
         float m1 = -1.0f;
 
         for (int ba = 0; ba < n_batch_size; ba++) {
@@ -707,12 +708,10 @@ ggml_cgraph * bert_build_graph(bert_ctx * ctx, bert_batch batch, bool normalize)
                 if (i < cur_len) {
                     token_layer_data[ba * cur_max_len + i] = batch[ba][i];
                     pad_mask_data[ba * cur_max_len + i] = 1.0f;
-                    sum_data[ba * cur_max_len + i] = 1 / (float)cur_len;
                 }
                 else {
                     token_layer_data[ba * cur_max_len + i] = pad_id; // padding
                     pad_mask_data[ba * cur_max_len + i] = 0.0f;
-                    sum_data[ba * cur_max_len + i] = 0.0f;
                 }
                 token_types_data[ba * cur_max_len + i] = 0;
                 pos_data[ba * cur_max_len + i] = i;
@@ -723,14 +722,12 @@ ggml_cgraph * bert_build_graph(bert_ctx * ctx, bert_batch batch, bool normalize)
         ggml_backend_tensor_set(token_types, token_types_data, 0, ggml_nbytes(token_types));
         ggml_backend_tensor_set(pad_mask, pad_mask_data, 0, ggml_nbytes(pad_mask));
         ggml_backend_tensor_set(positions, pos_data, 0, ggml_nbytes(positions));
-        ggml_backend_tensor_set(sum, sum_data, 0, ggml_nbytes(sum));
         ggml_backend_tensor_set(minus_one, &m1, 0, sizeof(m1));
 
         free(token_layer_data);
         free(token_types_data);
         free(pad_mask_data);
         free(pos_data);
-        free(sum_data);
     }
 
     // outer product the padding mask to kill off outside
@@ -742,14 +739,13 @@ ggml_cgraph * bert_build_graph(bert_ctx * ctx, bert_batch batch, bool normalize)
     struct ggml_tensor *inpL = ggml_get_rows(ctx0, model.word_embeddings, token_layer); // [E, L * B]
     inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.token_type_embeddings, token_types), inpL);
     inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.position_embeddings, positions), inpL);
-
-    inpL = ggml_add(ctx0, ggml_mul_mat(ctx0, model.embeddings_project_w, inpL), model.embeddings_project_b);
-
-    inpL = ggml_reshape_3d(ctx0, inpL, n_hidden, cur_max_len, n_batch_size); // [E, L, B]
+    inpL = ggml_reshape_3d(ctx0, inpL, n_embd, cur_max_len, n_batch_size); // [E, L, B]
     
     // embed layer norm
     inpL = ggml_norm_inplace(ctx0, inpL, layer_norm_eps);
     inpL = ggml_add(ctx0, ggml_mul(ctx0, inpL, model.ln_e_w), model.ln_e_b); // [E, L, B]
+
+    inpL = ggml_add(ctx0, ggml_mul_mat(ctx0, model.embeddings_project_w, inpL), model.embeddings_project_b);
 
     // layers
     for (int il = 0; il < n_layer; il++) {
@@ -818,15 +814,7 @@ ggml_cgraph * bert_build_graph(bert_ctx * ctx, bert_batch batch, bool normalize)
         inpL = cur;
     }
 
-    // pooling (sum = [L, 1, B])
-    inpL = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, inpL)), sum); // [E, 1, B]
-    inpL = ggml_reshape_2d(ctx0, inpL, n_hidden, n_batch_size); // [E, B]
-
-    // l2 normalize
-    if (normalize) {
-        inpL = ggml_rms_norm(ctx0, inpL, layer_norm_eps); // [E, B]
-        inpL = ggml_scale_inplace(ctx0, inpL, 1.0f / sqrt((float)n_hidden)); // [E, B] (since rms_norm does mean instead of sum)
-    }
+    inpL = ggml_add(ctx0, ggml_mul_mat(ctx0, model.classifier_w, inpL), model.classifier_b);
 
     // final output
     ggml_tensor * output = inpL;
