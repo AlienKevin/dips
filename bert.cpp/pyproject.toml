@@ -1,0 +1,56 @@
+[build-system]
+requires = ["scikit-build-core[pyproject]>=0.5.1"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "bert_cpp_python"
+dynamic = ["version"]
+description = "Python bindings for the bert.cpp embedding library"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Douglas Hanley", email = "thesecretaryofwar@gmail.com" },
+]
+dependencies = [
+    "tqdm",
+    "gguf",
+    "numpy",
+    "torch",
+    "transformers",
+    "huggingface_hub",
+]
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+all = [
+    "bert_cpp_python[test]",
+]
+
+[tool.scikit-build]
+wheel.packages = ["bert_cpp"]
+cmake.verbose = true
+cmake.minimum-version = "3.21"
+minimum-version = "0.5.1"
+sdist.include = [".git", "ggml/.git"]
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "bert_cpp/__init__.py"
+
+[project.urls]
+Homepage = "https://github.com/iamlemec/bert.cpp"
+Issues = "https://github.com/iamlemec/bert.cpp/issues"
+
+[tool.pytest.ini_options]
+addopts = "--ignore=ggml"
