@@ -868,7 +868,7 @@ void bert_forward_batch(bert_ctx * ctx, bert_batch batch, float * embeddings, bo
     ggml_backend_tensor_get(output, embeddings, 0, ggml_nbytes(output));
 }
 
-void bert_encode_batch(struct bert_ctx * ctx, bert_strings texts, float * embeddings, bool normalize, int32_t n_threads) {
+void bert_cut_batch(struct bert_ctx * ctx, bert_strings texts, float * logits, bool normalize, int32_t n_threads) {
     int32_t N = bert_n_max_tokens(ctx);
     int32_t n_input = texts.size();
 
@@ -878,23 +878,23 @@ void bert_encode_batch(struct bert_ctx * ctx, bert_strings texts, float * embedd
         batch.push_back(tokens);
     }
 
-    bert_forward_batch(ctx, batch, embeddings, normalize, n_threads);
+    bert_forward_batch(ctx, batch, logits, normalize, n_threads);
 }
 
-void bert_encode_batch_c(struct bert_ctx * ctx, const char ** texts, float * embeddings, int32_t n_input, bool normalize, int32_t n_threads) {
+void bert_cut_batch_c(struct bert_ctx * ctx, const char ** texts, float * logits, int32_t n_input, bool normalize, int32_t n_threads) {
     bert_strings strings;
     for (int i = 0; i < n_input; i++) {
         strings.push_back(texts[i]);
     }
-    bert_encode_batch(ctx, strings, embeddings, normalize, n_threads);
+    bert_cut_batch(ctx, strings, logits, normalize, n_threads);
 }
 
-void bert_forward(struct bert_ctx * ctx, bert_tokens tokens, float * embeddings, bool normalize, int32_t n_threads) {
+void bert_forward(struct bert_ctx * ctx, bert_tokens tokens, float * logits, bool normalize, int32_t n_threads) {
     bert_batch batch = {tokens};
-    bert_forward_batch(ctx, batch, embeddings, normalize, n_threads);
+    bert_forward_batch(ctx, batch, logits, normalize, n_threads);
 }
 
-void bert_encode(struct bert_ctx * ctx, bert_string text, float * embeddings, bool normalize, int32_t n_threads) {
+void bert_cut(struct bert_ctx * ctx, bert_string text, float * logits, bool normalize, int32_t n_threads) {
     bert_strings strings = {text};
-    bert_encode_batch(ctx, strings, embeddings, normalize, n_threads);
+    bert_cut_batch(ctx, strings, logits, normalize, n_threads);
 }

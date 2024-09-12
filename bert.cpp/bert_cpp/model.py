@@ -1,11 +1,11 @@
-import os
-import sys
 import ctypes
 import numpy as np
 from tqdm import tqdm
 
-from . import api
-from .utils import suppress_stdout_stderr
+import api
+from utils import suppress_stdout_stderr
+
+N_TAGS = 4
 
 # increment ctypes pointer
 def increment_pointer(p, d):
@@ -49,13 +49,15 @@ class BertModel:
         max_len = len(tokens) * max_fact
         return api.bert_detokenize(self.ctx, tokens, max_len, debug)
 
-    def embed_batch(self, batch, output=None, normalize=True, n_threads=8):
+    def cut_batch(self, batch, output=None, normalize=True, n_threads=8):
         if output is None:
-            return api.bert_encode_batch(self.ctx, batch, normalize, n_threads)
+            return api.bert_cut_batch(self.ctx, batch, normalize, n_threads)
         else:
-            api.bert_encode_batch_c(self.ctx, batch, output, normalize, n_threads)
+            api.bert_cut_batch_c(self.ctx, batch, output, normalize, n_threads)
 
-    def embed(self, text, progress=False, **kwargs):
+    def cut(self, text, progress=False, **kwargs):
+        max_text_len = len(text[0]) + 2
+
         # handle singleton case
         if isinstance(text, str):
             text = [text]
@@ -65,8 +67,8 @@ class BertModel:
         n_input = len(text)
 
         # create embedding memory
-        embed = np.zeros((n_input, self.n_embd), dtype=np.float32)
-        embed_p = embed.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+        logits = np.zeros((n_input * max_text_len, N_TAGS), dtype=np.float32)
+        logits_p = logits.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
 
         # loop over batches
         indices = range(0, n_input, self.batch_size)
@@ -75,8 +77,8 @@ class BertModel:
         for i in indices:
             j = min(i + self.batch_size, n_input)
             batch = text[i:j]
-            batch_p = increment_pointer(embed_p, i * self.n_embd)
-            self.embed_batch(batch, output=batch_p, **kwargs)
+            batch_p = increment_pointer(logits_p, i * N_TAGS)
+            self.cut_batch(batch, output=batch_p, **kwargs)
 
         # return squeezed maybe
-        return embed[0] if squeeze else embed
+        return logits[0] if squeeze else logits

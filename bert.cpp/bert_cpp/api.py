@@ -3,7 +3,9 @@
 import ctypes
 import numpy as np
 
-from .utils import load_shared_library
+from utils import load_shared_library
+
+N_TAGS = 4
 
 # load the library
 _lib = load_shared_library('bert')
@@ -87,7 +89,7 @@ def bert_detokenize(ctx, tokens, max_len, debug):
     return output.value.decode('utf-8')
 
 # encode batch
-_lib.bert_encode_batch_c.argtypes = [
+_lib.bert_cut_batch_c.argtypes = [
     ctypes.c_void_p,                 # struct bert_ctx * ctx
     ctypes.POINTER(ctypes.c_char_p), # const char ** texts
     ctypes.POINTER(ctypes.c_float),  # float * embeddings
@@ -95,16 +97,15 @@ _lib.bert_encode_batch_c.argtypes = [
     ctypes.c_bool,                   # bool normalize
     ctypes.c_int32,                  # int32_t n_threads
 ]
-def bert_encode_batch_c(ctx, texts, embed_p, normalize, n_threads):
+def bert_cut_batch_c(ctx, texts, embed_p, normalize, n_threads):
     n_inputs = len(texts)
     strings = (ctypes.c_char_p * n_inputs)()
     for j, s in enumerate(texts):
         strings[j] = s.encode('utf-8')
-    return _lib.bert_encode_batch_c(ctx, strings, embed_p, n_inputs, normalize, n_threads)
-def bert_encode_batch(ctx, texts, normalize, n_threads):
+    return _lib.bert_cut_batch_c(ctx, strings, embed_p, n_inputs, normalize, n_threads)
+def bert_cut_batch(ctx, texts, normalize, n_threads):
     n_inputs = len(texts)
-    n_embd = bert_n_embd(ctx)
-    embed = np.zeros((n_inputs, n_embd), dtype=np.float32)
-    embed_p = embeddings.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-    bert_encode_batch_c(ctx, texts, embed_p, normalize, n_threads)
-    return embed
+    logits = np.zeros((n_inputs, N_TAGS), dtype=np.float32)
+    logits_p = logits.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+    bert_cut_batch_c(ctx, texts, logits_p, normalize, n_threads)
+    return logits

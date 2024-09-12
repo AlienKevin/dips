@@ -172,18 +172,18 @@ BERT_API void bert_forward_batch(
     int32_t n_thread
 );
 
-BERT_API void bert_encode_batch(
+BERT_API void bert_cut_batch(
     struct bert_ctx * ctx,
     bert_strings texts,
-    float * embeddings,
+    float * logits,
     bool normalize,
     int32_t n_threads
 );
 
-BERT_API void bert_encode_batch_c(
+BERT_API void bert_cut_batch_c(
     struct bert_ctx * ctx,
     const char ** texts,
-    float * embeddings,
+    float * logits,
     int32_t n_input,
     bool normalize,
     int32_t n_threads
@@ -225,10 +225,10 @@ BERT_API void bert_forward(
     int32_t n_thread
 );
 
-BERT_API void bert_encode(
+BERT_API void bert_cut(
     struct bert_ctx * ctx,
     bert_string text,
-    float * embeddings,
+    float * logits,
     bool normalize,
     int32_t n_threads
 );
