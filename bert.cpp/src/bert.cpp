@@ -211,106 +211,26 @@ bert_tokens bert_tokenize(struct bert_ctx * ctx, bert_string text, uint64_t n_ma
     const bert_token eos_id = vocab.eos_id;
     const bert_token unk_id = vocab.unk_id;
 
-    std::string ori_str = text;
-    ori_str = bert_normalize_prompt(ori_str);
-    uint64_t ori_size = ori_str.size();
+    std::string normalized_text = bert_normalize_prompt(text);
 
-    // single punct / single symbol / single digit
-    // baseline: add whitespace on the left and right of punct and chinese characters
-    std::vector<std::string> words;
-    std::string new_str = "";
-    uint64_t i = 0;
-    while (i < ori_size) {
-        int utf_char_len = utf8_len(ori_str[i]);
-        if ((utf_char_len == 1) && ispunct(ori_str[i])) {
-            new_str += " ";
-            new_str += ori_str[i];
-            new_str += " ";
-            i += 1;
-        }
-        else if ((utf_char_len == 3) && is_chinese_char(ori_str.substr(i, 3))) {
-            new_str += " ";
-            new_str += ori_str.substr(i, 3);
-            new_str += " ";
-            i += 3;
-        }
-        else {
-            new_str += ori_str[i];
-            i += 1;
-        }
-    }
-
-    // split by whitespace
-    uint64_t l = 0;
-    uint64_t r = 0;
-    while (r < new_str.size()) {
-        // if is whitespace
-        if (isspace(new_str[r])) {
-            if (r > l) words.push_back(new_str.substr(l, (r - l)));
-            l = r + 1;
-            r = l;
-        }
-        else {
-            r += 1;
-        }
-    }
-    if (r > l) {
-        words.push_back(new_str.substr(l, (r - l)));
-    }
-
-    // start with a cls token
     bert_tokens tokens;
     tokens.push_back(bos_id);
 
-    // find the longest tokens that form the words
-    for (const std::string &word : words) {
-        // skip empty words
-        int n = word.size();
-        if (n == 0) continue;
+    for (size_t i = 0; i < normalized_text.length() && tokens.size() < n_max_tokens - 1;) {
+        int utf_char_len = utf8_len(normalized_text[i]);
+        std::string character = normalized_text.substr(i, utf_char_len);
 
-        // we're at the start of a new word
-        int i = 0;
-        bool match = false;
-        auto * token_map = &vocab.token_to_id;
-
-    loop:
-        // check for max tokens
-        if (tokens.size() >= n_max_tokens - 1) {
-            break;
-        }
-
-
-        // move through character position in word
-        while (i < n) {
-            // loop through possible match length
-            for (int j = n; j > i; j--) {
-                auto it = token_map->find(word.substr(i, j - i));
-                if (it != token_map->end()) {
-                    tokens.push_back(it->second);
-                    match = true;
-                    i = j;
-                    token_map = &vocab.subword_token_to_id;
-                    goto loop;
-                }
-            }
-
-            // we didn't find a match at this length
-            // fprintf(stderr, "%s: unknown token '%s'\n", __func__, word.substr(i, 1).data());
-            token_map = &vocab.subword_token_to_id;
-            i++;
-        }
-
-        // we didn't find any matches for this word
-        if (!match) {
-            // fprintf(stderr, "%s: unknown token '%s'\n", __func__, word.data());
+        auto it = vocab.token_to_id.find(character);
+        if (it != vocab.token_to_id.end()) {
+            tokens.push_back(it->second);
+        } else {
             tokens.push_back(unk_id);
         }
+
+        i += utf_char_len;
     }
 
-    // append terminate token
     tokens.push_back(eos_id);
-
-    // return tokens
     return tokens;
 }
 
@@ -318,36 +238,12 @@ bert_string bert_detokenize(struct bert_ctx * ctx, bert_tokens tokens, bool debu
     const bert_token bos_id = ctx->vocab.bos_id;
     const bert_token eos_id = ctx->vocab.eos_id;
 
-    const std::string word_prefix = ctx->vocab.word_prefix;
-    const std::string subword_prefix = ctx->vocab.subword_prefix;
-    const uint32_t word_prefix_len = word_prefix.size();
-    const uint32_t subword_prefix_len = subword_prefix.size();
-
     bert_string str = "";
     for (const uint64_t &t : tokens) {
-        std::string token = bert_vocab_id_to_token(ctx, t);
-        bool subword = (
-            (subword_prefix_len > 0 && token.find(subword_prefix) == 0) ||
-            (word_prefix_len > 0 && token.find(word_prefix) != 0)
-        );
-        if (debug) {
-            if ((str.size() > 0) && !subword) {
-                str += " ";
-            }
-            str += token;
-        } else {
-            if (t == bos_id || t == eos_id) {
-                continue;
-            }
-            if (subword) {
-                str += token.substr(subword_prefix_len);
-            } else {
-                if (str.size() > 0) {
-                    str += " ";
-                }
-                str += token.substr(word_prefix_len);
-            }
+        if (t == bos_id || t == eos_id) {
+            continue;
         }
+        str += bert_vocab_id_to_token(ctx, t);
     }
     return str;
 }
