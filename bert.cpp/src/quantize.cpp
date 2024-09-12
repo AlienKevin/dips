@@ -61,7 +61,8 @@ bool bert_model_quantize(const std::string & fname_inp, const std::string & fnam
     // set model params
     gguf_set_val_u32(gguf, "vocab_size", hparams.n_vocab);
     gguf_set_val_u32(gguf, "max_position_embedding", hparams.n_max_tokens);
-    gguf_set_val_u32(gguf, "hidden_size", hparams.n_embd);
+    gguf_set_val_u32(gguf, "embedding_size", hparams.n_embd);
+    gguf_set_val_u32(gguf, "hidden_size", hparams.n_hidden);
     gguf_set_val_u32(gguf, "intermediate_size", hparams.n_intermediate);
     gguf_set_val_u32(gguf, "num_attention_heads", hparams.n_head);
     gguf_set_val_u32(gguf, "num_hidden_layers", hparams.n_layer);
