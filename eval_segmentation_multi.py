@@ -158,25 +158,39 @@ if __name__ == "__main__":
     # from transformers import pipeline
     # cut = pipeline("token-classification", model=model_name, device="cpu")
 
-    from transformers import AutoModelForTokenClassification, AutoTokenizer
-    import torch
-    from pathlib import Path
-    model = AutoModelForTokenClassification.from_pretrained(model_name, torch_dtype=torch.float16).to('cpu')
-    vocab_path = Path(model_name) / "vocab.txt"
-    vocab = {}
-    with open(vocab_path, 'r', encoding='utf-8') as f:
-        for i, line in enumerate(f):
-            vocab[line.strip()] = i
+    # from transformers import AutoModelForTokenClassification
+    # import torch
+    # from pathlib import Path
+    # model = AutoModelForTokenClassification.from_pretrained(model_name, torch_dtype=torch.float16).to('cpu')
+    # vocab_path = Path(model_name) / "vocab.txt"
+    # vocab = {}
+    # with open(vocab_path, 'r', encoding='utf-8') as f:
+    #     for i, line in enumerate(f):
+    #         vocab[line.strip()] = i
 
+    # def cut(text):
+    #     inputs = torch.tensor([vocab['[CLS]']] + [vocab[char] if char in vocab else vocab['[UNK]'] for char in text.lower()] + [vocab['[SEP]']]).unsqueeze(0)
+    #     with torch.no_grad():
+    #         # squeeze removes the first singleton batch dimension
+    #         # [1, -1] removes the first [CLS] and last [SEP] tokens
+    #         logits = model(input_ids=inputs).logits.squeeze()[1:-1]
+    #         predictions = logits.argmax(dim=-1).tolist()
+    #     return list({"word": token, "entity": "DIPS"[prediction]} for token, prediction in zip(text, predictions))
+
+    import sys
+    import os
+    module_path = os.path.join(os.path.dirname(__file__), 'bert.cpp')
+    sys.path.append(module_path)
+    from bert_cpp import BertModel
+
+    # model = BertModel('bert.cpp/electra.gguf', use_cpu=True)
+    # model = BertModel('bert.cpp/electra-q8_0.gguf', use_cpu=True)
+    # model = BertModel('bert.cpp/electra-q4_1.gguf', use_cpu=True)
+    model = BertModel('bert.cpp/electra-q4_0.gguf', use_cpu=True)
     def cut(text):
-        inputs = torch.tensor([vocab['[CLS]']] + [vocab[char] if char in vocab else vocab['[UNK]'] for char in text.lower()] + [vocab['[SEP]']]).unsqueeze(0)
-        with torch.no_grad():
-            # squeeze removes the first singleton batch dimension
-            # [1, -1] removes the first [CLS] and last [SEP] tokens
-            logits = model(input_ids=inputs).logits.squeeze()[1:-1]
-            predictions = logits.argmax(dim=-1).tolist()
-        return list({"word": token, "entity": "DIPS"[prediction]} for token, prediction in zip(text, predictions))
-
+        tags = model.cut(text, mode='dips')
+        return [{'word': char, 'entity': tag} for char, tag in zip(text, tags)]
+    
     # from scratch_inference.flax_model import Electra
     # model = Electra()
     # model.load("finetune-ckip-transformers/electra_small_layers_6_multi_compressed")
