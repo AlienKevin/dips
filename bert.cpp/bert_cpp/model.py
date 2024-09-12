@@ -1,7 +1,7 @@
 import ctypes
 import numpy as np
 from tqdm import tqdm
-
+import re
 import api
 from utils import suppress_stdout_stderr
 
@@ -55,7 +55,7 @@ class BertModel:
         else:
             api.bert_cut_batch_c(self.ctx, batch, output, normalize, n_threads)
 
-    def cut(self, text, progress=False, **kwargs):
+    def _cut(self, text, progress=False, **kwargs):
         max_text_len = len(text[0]) + 2
 
         # handle singleton case
@@ -82,3 +82,18 @@ class BertModel:
 
         # return squeezed maybe
         return logits[0] if squeeze else logits
+
+    def cut(self, text, mode='fine'):
+        assert isinstance(text, str)
+        logits = self._cut([text], progress=False)
+        predictions = np.argmax(logits, axis=-1)[1:-1]
+        dips_result = ''.join(f'{["-", "", "|", " "][pred]}{char}' for char, pred in zip(text, predictions)).lstrip()
+        
+        if mode == 'fine':
+            return re.split(r'[-| ]', dips_result)
+        elif mode == 'coarse':
+            return dips_result.replace('-', '').replace('|', '').split(' ')
+        elif mode == 'dips':
+            return dips_result
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
