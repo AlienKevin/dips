@@ -2,8 +2,8 @@ import ctypes
 import numpy as np
 from tqdm import tqdm
 import re
-import api
-from utils import suppress_stdout_stderr
+from . import api
+from .utils import suppress_stdout_stderr
 
 N_TAGS = 4
 
@@ -33,7 +33,9 @@ class BertModel:
             self.allocate(batch_size, max_tokens)
 
     def __del__(self):
-        api.bert_free(self.ctx)
+        # If python is already in the process of shutting down, the imported api module will be None
+        if api.bert_free is not None:
+            api.bert_free(self.ctx)
 
     def allocate(self, batch_size, max_tokens=None):
         self.batch_size = batch_size
@@ -94,6 +96,8 @@ class BertModel:
         elif mode == 'coarse':
             return dips_result.replace('-', '').replace('|', '').split(' ')
         elif mode == 'dips':
+            return ['DIPS'[pred] for pred in predictions]
+        elif mode == 'dips_str':
             return dips_result
         else:
             raise ValueError(f"Invalid mode: {mode}")

@@ -4,3 +4,4 @@ models
 dist
 ggml/
 *.gguf
+*.dylib

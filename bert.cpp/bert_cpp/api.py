@@ -3,7 +3,7 @@
 import ctypes
 import numpy as np
 
-from utils import load_shared_library
+from .utils import load_shared_library
 
 N_TAGS = 4
 
