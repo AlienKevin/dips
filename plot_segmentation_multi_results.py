@@ -79,7 +79,7 @@ plt.plot(electra_small_distilled_models['sizes'], electra_small_distilled_models
 # Plot other models with different shapes and colors
 markers = ['D', 'v', '<', '>', 'p', '*', 'h', 'H', '+', 'x', 'd', '|', '_']
 for i, (name, size, f1) in enumerate(zip(other_models['names'], other_models['sizes'], other_models['ud_yue_hk_f1'])):
-    plt.scatter(size, f1, marker=markers[i % len(markers)], s=100, c=colors[1:-2][i % len(colors)], label=name)
+    plt.scatter(size, f1, marker=markers[i % len(markers)], c=colors[1:-2][i % len(colors)], label=name)
 plt.xlabel('Model Size (MB)')
 plt.ylabel('F1 Score')
 plt.xscale('log')  # Use log scale for x-axis due to potentially large size differences
