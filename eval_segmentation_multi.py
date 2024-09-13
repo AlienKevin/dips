@@ -220,9 +220,7 @@ if __name__ == "__main__":
         # from transformers import pipeline
         # cut = pipeline("token-classification", model=model_name, device="cpu")
 
-        start = time.time()
         from transformers import AutoModelForTokenClassification
-        model_results[model_name]['import_time'] = time.time() - start
 
         import torch
         from pathlib import Path
@@ -279,9 +277,7 @@ if __name__ == "__main__":
         module_path = os.path.join(os.path.dirname(__file__), 'bert.cpp')
         sys.path.append(module_path)
 
-        start = time.time()
         from bert_cpp import BertModel
-        model_results[model_name]['import_time'] = time.time() - start
 
         start = time.time()
         model = BertModel(model_path, use_cpu=True)
