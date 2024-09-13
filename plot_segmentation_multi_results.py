@@ -49,13 +49,13 @@ for model_name, model_data in results.items():
                 electra_small_distilled_models['ud_yue_hk_f1'].append(model_data['AlienKevin/ud_yue_hk']['token_f'])
         else:
             if model_name == 'electra_base_hkcancor_multi':
-                display_name = 'ELECTRA Base'
+                display_name = 'Base'
             elif model_name == 'electra_large_hkcancor_multi':
-                display_name = 'ELECTRA Large'
+                display_name = 'Large'
             elif model_name == 'albert_tiny_chinese_hkcancor_multi':
-                display_name = 'ALBERT Tiny (Chinese)'
+                continue
             elif model_name == 'bert_tiny_chinese_hkcancor_multi':
-                display_name = 'BERT Tiny (Chinese)'
+                continue
             else:
                 display_name = model_name
             other_models['names'].append(display_name)
@@ -71,10 +71,10 @@ colors = ['#e41a1c', '#377eb8', '#ff7f00', '#4daf4a', '#f781bf', '#a65628', '#98
 plt.plot(gguf_models['sizes'], gguf_models['ud_yue_hk_f1'], 'o-', color=colors[0], label='Ours')
 
 # Plot ELECTRA Small models as a line
-plt.plot(electra_small_hkcancor_models['sizes'], electra_small_hkcancor_models['ud_yue_hk_f1'], 's-', color=colors[-1], label='ELECTRA Small')
+plt.plot(electra_small_hkcancor_models['sizes'], electra_small_hkcancor_models['ud_yue_hk_f1'], 's-', color=colors[-1], label='Small (Layer Dropped)')
 
 # Plot ELECTRA Small Distilled models as a line
-plt.plot(electra_small_distilled_models['sizes'], electra_small_distilled_models['ud_yue_hk_f1'], '^-', color=colors[-2], label='ELECTRA Distilled')
+plt.plot(electra_small_distilled_models['sizes'], electra_small_distilled_models['ud_yue_hk_f1'], '^-', color=colors[-2], label='Small (Distilled)')
 
 # Plot other models with different shapes and colors
 markers = ['D', 'v', '<', '>', 'p', '*', 'h', 'H', '+', 'x', 'd', '|', '_']
@@ -84,15 +84,16 @@ plt.xlabel('Model Size (MB)')
 plt.ylabel('F1 Score')
 plt.xscale('log')  # Use log scale for x-axis due to potentially large size differences
 plt.grid(True, which="both", ls="-", alpha=0.2)
+plt.gcf().set_size_inches(7.5, 4)  # Increase width from 6 to 10 inches, keep height at 4 inches
 
 # Move legend to the top and reorganize
 handles, labels = plt.gca().get_legend_handles_labels()
-order = ['Ours', 'ELECTRA Small', 'ELECTRA Distilled', 'BERT Tiny (Chinese)', 'ALBERT Tiny (Chinese)', 'ELECTRA Large', 'ELECTRA Base']
+order = ['Ours', 'Small (Distilled)', 'Small (Layer Dropped)', 'Base', 'Large']
 handles_dict = dict(zip(labels, handles))
 ordered_handles = [handles_dict[label] for label in order if label in handles_dict]
 ordered_labels = [label for label in order if label in handles_dict]
 
-plt.legend(ordered_handles, ordered_labels, bbox_to_anchor=(0.5, 1.5), loc='upper center', ncol=3)
+plt.legend(ordered_handles, ordered_labels, bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=5, frameon=False)
 
 plt.tight_layout()
 plt.savefig('multi_model_performance_vs_size.png', dpi=300, bbox_inches='tight')
