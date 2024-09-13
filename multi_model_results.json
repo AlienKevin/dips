@@ -1,0 +1,392 @@
+{
+    "electra_small_hkcancor_multi": {
+        "import_time": 0.22864794731140137,
+        "load_time": 0.7274570465087891,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9860041987403779,
+            "correct_predictions": 2818,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9541359821887309,
+            "token_p": 0.9457459088748557,
+            "token_r": 0.9626762510367708
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.940128744978462,
+            "token_p": 0.9335768528309142,
+            "token_r": 0.9467732501462274
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.913631042360456,
+            "token_p": 0.9032925047758175,
+            "token_r": 0.9242089771891097
+        },
+        "total_tokens": 103242,
+        "total_time": 41.248279094696045
+    },
+    "electra_small_layers_6_hkcancor_multi": {
+        "import_time": 1.2159347534179688e-05,
+        "load_time": 0.06958198547363281,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9814555633310007,
+            "correct_predictions": 2805,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9469935625256815,
+            "token_p": 0.9359685934750237,
+            "token_r": 0.9582813582813583
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9266573318526387,
+            "token_p": 0.9182775119617225,
+            "token_r": 0.9351915018029432
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.8978595909844065,
+            "token_p": 0.8835998927805575,
+            "token_r": 0.9125870899275597
+        },
+        "total_tokens": 103242,
+        "total_time": 22.27188539505005
+    },
+    "electra_small_layers_5_hkcancor_multi": {
+        "import_time": 8.821487426757812e-06,
+        "load_time": 0.05507040023803711,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.976557032890133,
+            "correct_predictions": 2791,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9388132862578412,
+            "token_p": 0.9263969692869707,
+            "token_r": 0.9515669515669516
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9146714584041571,
+            "token_p": 0.9097671722538885,
+            "token_r": 0.91962890625
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.8688187123919829,
+            "token_p": 0.8486984575949087,
+            "token_r": 0.8899161221557996
+        },
+        "total_tokens": 103242,
+        "total_time": 17.624484062194824
+    },
+    "electra_small_layers_4_hkcancor_multi": {
+        "import_time": 1.2159347534179688e-05,
+        "load_time": 0.04896998405456543,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9583624912526242,
+            "correct_predictions": 2739,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9147748673172402,
+            "token_p": 0.8992863875050492,
+            "token_r": 0.9308062155947321
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.8556857745304762,
+            "token_p": 0.8476634606042942,
+            "token_r": 0.8638613861386139
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.7428352098259979,
+            "token_p": 0.7268071740713765,
+            "token_r": 0.7595861084681256
+        },
+        "total_tokens": 103242,
+        "total_time": 14.817397832870483
+    },
+    "electra_small_layers_3_hkcancor_multi": {
+        "import_time": 2.8848648071289062e-05,
+        "load_time": 0.02949213981628418,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9541637508747376,
+            "correct_predictions": 2727,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9021168559371463,
+            "token_p": 0.8844860064585576,
+            "token_r": 0.9204648883287825
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.8256554584505998,
+            "token_p": 0.8174618693781776,
+            "token_r": 0.8340149625935163
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.6845340660364178,
+            "token_p": 0.666954036027043,
+            "token_r": 0.7030659587697901
+        },
+        "total_tokens": 103242,
+        "total_time": 11.281323432922363
+    },
+    "electra_base_hkcancor_multi": {
+        "import_time": 1.0728836059570312e-05,
+        "load_time": 0.07763195037841797,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9849545136459062,
+            "correct_predictions": 2815,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9663281303251312,
+            "token_p": 0.9586827157154449,
+            "token_r": 0.9740964683248592
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9532989541664658,
+            "token_p": 0.9448743670583739,
+            "token_r": 0.9618751215716786
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9306324555480532,
+            "token_p": 0.9169087481982482,
+            "token_r": 0.9447732206100765
+        },
+        "total_tokens": 103242,
+        "total_time": 211.38227725028992
+    },
+    "electra_large_hkcancor_multi": {
+        "import_time": 1.2159347534179688e-05,
+        "load_time": 0.24297380447387695,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9839048285514346,
+            "correct_predictions": 2812,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9620322316307021,
+            "token_p": 0.9542129504199404,
+            "token_r": 0.9699807215643074
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9570918908494842,
+            "token_p": 0.9514953987730062,
+            "token_r": 0.9627546071774976
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9284079764628964,
+            "token_p": 0.9143593045717965,
+            "token_r": 0.9428950863213812
+        },
+        "total_tokens": 103242,
+        "total_time": 569.1398870944977
+    },
+    "albert_tiny_chinese_hkcancor_multi": {
+        "import_time": 1.0013580322265625e-05,
+        "load_time": 0.03145599365234375,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9625612316305109,
+            "correct_predictions": 2751,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9189336605986228,
+            "token_p": 0.9006348145673237,
+            "token_r": 0.9379915094996172
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.8887811029732745,
+            "token_p": 0.8836805555555556,
+            "token_r": 0.8939408722802225
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.8811038396412063,
+            "token_p": 0.8730727371666969,
+            "token_r": 0.889284064665127
+        },
+        "total_tokens": 103242,
+        "total_time": 22.12427258491516
+    },
+    "bert_tiny_chinese_hkcancor_multi": {
+        "import_time": 1.0013580322265625e-05,
+        "load_time": 0.0579679012298584,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9496151154653604,
+            "correct_predictions": 2714,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.890951595159516,
+            "token_p": 0.8761917641490297,
+            "token_r": 0.9062172179872718
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.8131695331695332,
+            "token_p": 0.8135693215339233,
+            "token_r": 0.812770137524558
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.73282406584947,
+            "token_p": 0.7379719962788922,
+            "token_r": 0.7277474595408355
+        },
+        "total_tokens": 103242,
+        "total_time": 21.70951557159424
+    },
+    "electra_small_layers_6_multi": {
+        "import_time": 8.106231689453125e-06,
+        "load_time": 0.06844592094421387,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.980405878236529,
+            "correct_predictions": 2802,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9616277481906322,
+            "token_p": 0.9528448684121508,
+            "token_r": 0.9705740472744814
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9454334365325078,
+            "token_p": 0.9375419744795165,
+            "token_r": 0.9534588740364913
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9253070309234089,
+            "token_p": 0.9124108734402852,
+            "token_r": 0.9385729675216026
+        },
+        "total_tokens": 103242,
+        "total_time": 26.144896030426025
+    },
+    "electra_small_layers_6_multi_compressed": {
+        "import_time": 1.0728836059570312e-05,
+        "load_time": 0.061682939529418945,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9800559832050385,
+            "correct_predictions": 2801,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.957781033836508,
+            "token_p": 0.9478653807243542,
+            "token_r": 0.9679063360881542
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9401371053393839,
+            "token_p": 0.9304347826086956,
+            "token_r": 0.9500439067226071
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9235792565811772,
+            "token_p": 0.9107580551717991,
+            "token_r": 0.9367665933259993
+        },
+        "total_tokens": 103242,
+        "total_time": 31.61625051498413
+    },
+    "electra.gguf": {
+        "import_time": 0.04126620292663574,
+        "load_time": 0.07380390167236328,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9800559832050385,
+            "correct_predictions": 2801,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.957781033836508,
+            "token_p": 0.9478653807243542,
+            "token_r": 0.9679063360881542
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.940296346348762,
+            "token_p": 0.9305502483760031,
+            "token_r": 0.9502487562189055
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9237043983233723,
+            "token_p": 0.9109120484880897,
+            "token_r": 0.9368611633130128
+        },
+        "total_tokens": 103242,
+        "total_time": 19.796624422073364
+    },
+    "electra-q8_0.gguf": {
+        "import_time": 5.9604644775390625e-06,
+        "load_time": 0.042874813079833984,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9800559832050385,
+            "correct_predictions": 2801,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9577810338365079,
+            "token_p": 0.9479293133684068,
+            "token_r": 0.967839680462778
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.940256731975678,
+            "token_p": 0.930645777607948,
+            "token_r": 0.95006826604252
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9237738065653028,
+            "token_p": 0.9108507273172797,
+            "token_r": 0.9370688667354188
+        },
+        "total_tokens": 103242,
+        "total_time": 15.116163730621338
+    },
+    "electra-q4_1.gguf": {
+        "import_time": 6.9141387939453125e-06,
+        "load_time": 0.03676795959472656,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.9790062981105668,
+            "correct_predictions": 2798,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9568296336647147,
+            "token_p": 0.9460078093442844,
+            "token_r": 0.9679019148643063
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9378133436174316,
+            "token_p": 0.926733993902439,
+            "token_r": 0.9491608118657299
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9195365993976243,
+            "token_p": 0.9048485924873457,
+            "token_r": 0.9347093223254214
+        },
+        "total_tokens": 103242,
+        "total_time": 22.608081340789795
+    },
+    "electra-q4_0.gguf": {
+        "import_time": 3.814697265625e-06,
+        "load_time": 0.031709909439086914,
+        "AlienKevin/hkcancor-multi": {
+            "accuracy": 0.976557032890133,
+            "correct_predictions": 2791,
+            "total_predictions": 2858
+        },
+        "AlienKevin/ud_yue_hk": {
+            "token_f": 0.9560484419648931,
+            "token_p": 0.9446087657972573,
+            "token_r": 0.9677685950413223
+        },
+        "AlienKevin/ud_zh_hk": {
+            "token_f": 0.9382168674698794,
+            "token_p": 0.9261655566127498,
+            "token_r": 0.9505859375
+        },
+        "AlienKevin/cityu-seg": {
+            "token_f": 0.9205337537300828,
+            "token_p": 0.9050930026572188,
+            "token_r": 0.936510482300378
+        },
+        "total_tokens": 103242,
+        "total_time": 13.154698371887207
+    }
+}
