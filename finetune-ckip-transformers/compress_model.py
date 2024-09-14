@@ -135,14 +135,3 @@ model.save_pretrained(output_dir)
 tokenizer.save_pretrained(output_dir)
 
 print(f"Model and tokenizer saved to {output_dir}")
-
-# Convert model to fp16
-import torch
-
-# Convert model to fp16
-model_fp16 = model.half()
-
-# Save the fp16 model
-model_fp16.save_pretrained(output_dir)
-
-print(f"Model converted to fp16 and saved to {output_dir}")

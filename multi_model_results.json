@@ -260,8 +260,7 @@
         "total_time": 26.144896030426025
     },
     "electra_small_layers_6_multi_compressed": {
-        "import_time": 1.0728836059570312e-05,
-        "load_time": 0.061682939529418945,
+        "load_time": 0.662344217300415,
         "AlienKevin/hkcancor-multi": {
             "accuracy": 0.9800559832050385,
             "correct_predictions": 2801,
@@ -278,12 +277,12 @@
             "token_r": 0.9500439067226071
         },
         "AlienKevin/cityu-seg": {
-            "token_f": 0.9235792565811772,
+            "token_f": 0.923589691443808,
             "token_p": 0.9107580551717991,
-            "token_r": 0.9367665933259993
+            "token_r": 0.9367880635328092
         },
         "total_tokens": 103242,
-        "total_time": 31.61625051498413
+        "total_time": 22.306259870529175
     },
     "electra.gguf": {
         "import_time": 0.04126620292663574,

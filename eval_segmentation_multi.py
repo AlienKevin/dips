@@ -226,10 +226,7 @@ if __name__ == "__main__":
         from pathlib import Path
 
         start = time.time()
-        if model_name.endswith("compressed"):
-            model = AutoModelForTokenClassification.from_pretrained(model_path, torch_dtype=torch.float16).to('cpu')
-        else:
-            model = AutoModelForTokenClassification.from_pretrained(model_path).to('cpu')
+        model = AutoModelForTokenClassification.from_pretrained(model_path).to('cpu')
         vocab_path = Path(model_path) / "vocab.txt"
         vocab = {}
         with open(vocab_path, 'r', encoding='utf-8') as f:
