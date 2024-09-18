@@ -1,3 +1,4 @@
 [submodule "ggml"]
 	path = ggml
 	url = https://github.com/ggerganov/ggml
+	commit = 6b14d738d9100c50c199a3b1aaa960f633904476
