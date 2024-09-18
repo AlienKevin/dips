@@ -32,10 +32,10 @@ def get_latency(model_data):
     return model_data['total_time'] / model_data['total_tokens']
 
 # Collect data and group models
-gguf_models = {'sizes': [], 'ud_yue_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
-electra_small_hkcancor_models = {'sizes': [], 'ud_yue_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
-electra_small_distilled_models = {'sizes': [], 'ud_yue_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
-other_models = {'names': [], 'sizes': [], 'ud_yue_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
+gguf_models = {'sizes': [], 'ud_yue_hk_f1': [], 'ud_zh_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
+electra_small_hkcancor_models = {'sizes': [], 'ud_yue_hk_f1': [], 'ud_zh_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
+electra_small_distilled_models = {'sizes': [], 'ud_yue_hk_f1': [], 'ud_zh_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
+other_models = {'names': [], 'sizes': [], 'ud_yue_hk_f1': [], 'ud_zh_hk_f1': [], 'latencies': [], 'hkcancor_accuracies': []}
 
 for model_name, model_data in results.items():
     model_size = get_model_size(model_name)
@@ -46,17 +46,20 @@ for model_name, model_data in results.items():
                 continue
             gguf_models['sizes'].append(model_size)
             gguf_models['ud_yue_hk_f1'].append(model_data['AlienKevin/ud_yue_hk']['token_f'])
+            gguf_models['ud_zh_hk_f1'].append(model_data['AlienKevin/ud_zh_hk']['token_f'])
             gguf_models['latencies'].append(latency)
             gguf_models['hkcancor_accuracies'].append(model_data['AlienKevin/hkcancor-multi']['accuracy'])
         elif model_name.startswith('electra_small'):
             if 'hkcancor' in model_name:
                 electra_small_hkcancor_models['sizes'].append(model_size)
                 electra_small_hkcancor_models['ud_yue_hk_f1'].append(model_data['AlienKevin/ud_yue_hk']['token_f'])
+                electra_small_hkcancor_models['ud_zh_hk_f1'].append(model_data['AlienKevin/ud_zh_hk']['token_f'])
                 electra_small_hkcancor_models['latencies'].append(latency)
                 electra_small_hkcancor_models['hkcancor_accuracies'].append(model_data['AlienKevin/hkcancor-multi']['accuracy'])
             else:
                 electra_small_distilled_models['sizes'].append(model_size)
                 electra_small_distilled_models['ud_yue_hk_f1'].append(model_data['AlienKevin/ud_yue_hk']['token_f'])
+                electra_small_distilled_models['ud_zh_hk_f1'].append(model_data['AlienKevin/ud_zh_hk']['token_f'])
                 electra_small_distilled_models['latencies'].append(latency)
                 electra_small_distilled_models['hkcancor_accuracies'].append(model_data['AlienKevin/hkcancor-multi']['accuracy'])
         else:
@@ -73,6 +76,7 @@ for model_name, model_data in results.items():
             other_models['names'].append(display_name)
             other_models['sizes'].append(model_size)
             other_models['ud_yue_hk_f1'].append(model_data['AlienKevin/ud_yue_hk']['token_f'])
+            other_models['ud_zh_hk_f1'].append(model_data['AlienKevin/ud_zh_hk']['token_f'])
             other_models['latencies'].append(latency)
             other_models['hkcancor_accuracies'].append(model_data['AlienKevin/hkcancor-multi']['accuracy'])
 
@@ -182,3 +186,28 @@ plt.legend(ordered_handles, ordered_labels, bbox_to_anchor=(0.5, 1.2), loc='uppe
 plt.tight_layout()
 plt.savefig('multi_model_hkcancor_accuracy_vs_size.png', dpi=300, bbox_inches='tight')
 plt.close()
+
+
+# Create a Markdown table with model information
+print("| Model | Size (MB) | Latency (ms/token) | UD Yue F1 | UD Zh F1 |")
+print("|-------|-----------|---------------------|-----------|----------|")
+
+# Function to format float values
+def format_float(value):
+    return f"{value:.4f}"
+
+# GGUF models
+for size, latency, ud_yue_f1, ud_zh_f1 in zip(gguf_models['sizes'], gguf_models['latencies'], gguf_models['ud_yue_hk_f1'], gguf_models['ud_zh_hk_f1']):
+    print(f"| Ours | {size:.2f} | {latency*1000:.2f} | {format_float(ud_yue_f1)} | {format_float(ud_zh_f1)} |")
+
+# ELECTRA Small (Layer Dropped) models
+for size, latency, ud_yue_f1, ud_zh_f1 in zip(electra_small_hkcancor_models['sizes'], electra_small_hkcancor_models['latencies'], electra_small_hkcancor_models['ud_yue_hk_f1'], electra_small_hkcancor_models['ud_zh_hk_f1']):
+    print(f"| Small (Layer Dropped) | {size:.2f} | {latency*1000:.2f} | {format_float(ud_yue_f1)} | {format_float(ud_zh_f1)} |")
+
+# ELECTRA Small (Distilled) models
+for size, latency, ud_yue_f1, ud_zh_f1 in zip(electra_small_distilled_models['sizes'], electra_small_distilled_models['latencies'], electra_small_distilled_models['ud_yue_hk_f1'], electra_small_distilled_models['ud_zh_hk_f1']):
+    print(f"| Small (Distilled) | {size:.2f} | {latency*1000:.2f} | {format_float(ud_yue_f1)} | {format_float(ud_zh_f1)} |")
+
+# Other models
+for name, size, latency, ud_yue_f1, ud_zh_f1 in zip(other_models['names'], other_models['sizes'], other_models['latencies'], other_models['ud_yue_hk_f1'], other_models['ud_zh_hk_f1']):
+    print(f"| {name} | {size:.2f} | {latency*1000:.2f} | {format_float(ud_yue_f1)} | {format_float(ud_zh_f1)} |")
