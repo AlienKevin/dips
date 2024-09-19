@@ -27,6 +27,9 @@ To build the C++ library for CPU/CUDA/Metal, run the following
 # CPU
 cmake -B build . && make -C build -j
 
+# WASM
+emcmake cmake -B build . && make -C build -j
+
 # CUDA
 cmake -DGGML_CUBLAS=ON -B build . && make -C build -j
 

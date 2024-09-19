@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELECTRA Logits Demo</title>
+    <style>
+        #output {
+            width: 100%;
+            height: 200px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            padding: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>ELECTRA Logits Demo</h1>
+    <div>
+        <label for="input-text">Enter a sentence:</label>
+        <input type="text" id="input-text" size="50">
+        <button onclick="processInput()">Process</button>
+    </div>
+    <div id="output"></div>
+
+    <script type="text/javascript" src="../build/bin/libmain.js"></script>
+    <script type="text/javascript">
+        var instance = null;
+
+        function loadModel() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '../electra-q4_0.gguf', true);
+            xhr.responseType = 'arraybuffer';
+
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    var modelBuffer = new Uint8Array(xhr.response);
+                    var modelFileName = 'electra-q4_0.gguf';
+
+                    try {
+                        Module.FS_createDataFile("/", modelFileName, modelBuffer, true, true);
+                        instance = Module.init(modelFileName);
+                        console.log('Model loaded successfully');
+                    } catch (e) {
+                        console.error('Error loading model:', e);
+                    }
+                } else {
+                    console.error('Failed to load model file');
+                }
+            };
+
+            xhr.send();
+        }
+
+        function processInput() {
+            if (!instance) {
+                console.error('Model not loaded');
+                return;
+            }
+
+            var inputText = document.getElementById('input-text').value;
+            if (!inputText) {
+                alert('Please enter a sentence');
+                return;
+            }
+
+            document.getElementById('output').textContent = 'Processing...\n';
+
+            setTimeout(function () {
+                try {
+                    var result = Module.run(instance, inputText);
+                    document.getElementById('output').textContent = 'Raw logits:\n' + result;
+                } catch (e) {
+                    console.error('Error processing input:', e);
+                    document.getElementById('output').textContent = 'Error processing input';
+                }
+            }, 0);
+        }
+
+        window.onload = loadModel;
+    </script>
+</body>
+
+</html>
