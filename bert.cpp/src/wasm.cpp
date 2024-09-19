@@ -50,10 +50,6 @@ EMSCRIPTEN_BINDINGS(bert) {
         bert_batch batch = { tokens };
         bert_forward_batch(ctx, batch, logits.data(), true, 1);
 
-        // Remove the first 4 and last 4 logits corresponding to the CLS and SEP tokens
-        logits.erase(logits.begin(), logits.begin() + 4);
-        logits.erase(logits.end() - 4, logits.end());
-
         return emscripten::val(emscripten::typed_memory_view(logits.size(), logits.data()));
     }));
 }
