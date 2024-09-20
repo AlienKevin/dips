@@ -73,7 +73,7 @@ else()
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s WASM=1 -s USE_PTHREADS=1")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s WASM=1 -s USE_PTHREADS=1")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s WASM=1 -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE_STRICT=0 -s INITIAL_MEMORY=2000MB -s TOTAL_MEMORY=2000MB -s FORCE_FILESYSTEM=1 -s SINGLE_FILE=1 -s EXPORTED_RUNTIME_METHODS=\"['print', 'printErr', 'ccall', 'cwrap']\"")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s WASM=1 -s USE_PTHREADS=1 -s EXPORT_ES6=1 -s PTHREAD_POOL_SIZE_STRICT=0 -s INITIAL_MEMORY=15MB -s TOTAL_MEMORY=15MB -s FORCE_FILESYSTEM=1 -s SINGLE_FILE=1 -s EXPORTED_RUNTIME_METHODS=\"['print', 'printErr', 'ccall', 'cwrap']\"")
 endif()
 
 #
@@ -102,7 +102,7 @@ install(TARGETS ggml LIBRARY DESTINATION bert_cpp)
 
 # add bert
 if (EMSCRIPTEN)
-    set(TARGET libmain)
+    set(TARGET libbert)
     add_executable(${TARGET}
         src/wasm.cpp
     )

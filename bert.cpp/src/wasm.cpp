@@ -5,44 +5,37 @@
 
 #include <vector>
 
-std::vector<struct bert_ctx *> g_contexts(4, nullptr);
+bert_ctx * g_context = nullptr;
 
 EMSCRIPTEN_BINDINGS(bert) {
     emscripten::function("init", emscripten::optional_override([](const std::string & path_model) {
-        for (size_t i = 0; i < g_contexts.size(); ++i) {
-            if (g_contexts[i] == nullptr) {
-                g_contexts[i] = bert_load_from_file(path_model.c_str(), false);
-                if (g_contexts[i] != nullptr) {
-                    // allocate buffer for building compute graph
-                    int batch_size = 1;
-                    bert_allocate_buffers(g_contexts[i], bert_n_max_tokens(g_contexts[i]), batch_size);
-                    return i + 1;
-                } else {
-                    return (size_t) 0;
-                }
+        if (g_context == nullptr) {
+            g_context = bert_load_from_file(path_model.c_str(), false);
+            if (g_context != nullptr) {
+                // allocate buffer for building compute graph
+                int batch_size = 1;
+                bert_allocate_buffers(g_context, bert_n_max_tokens(g_context), batch_size);
+                return true;
+            } else {
+                return false;
             }
         }
 
-        return (size_t) 0;
+        return false;
     }));
 
-    emscripten::function("free", emscripten::optional_override([](size_t index) {
-        --index;
-
-        if (index < g_contexts.size()) {
-            bert_free(g_contexts[index]);
-            g_contexts[index] = nullptr;
+    emscripten::function("free", emscripten::optional_override([]() {
+        if (g_context != nullptr) {
+            bert_free(g_context);
+            g_context = nullptr;
         }
     }));
 
-    emscripten::function("run", emscripten::optional_override([](size_t index, const std::string & input) {
-        --index;
-
-        if (index >= g_contexts.size() || g_contexts[index] == nullptr) {
+    emscripten::function("run", emscripten::optional_override([](const std::string & input) {
+        if (g_context == nullptr) {
             return emscripten::val::null();
         }
-
-        bert_ctx * ctx = g_contexts[index];
+        bert_ctx * ctx = g_context;
         int n_max_tokens = bert_n_max_tokens(ctx);
         bert_tokens tokens = bert_tokenize(ctx, input.c_str(), n_max_tokens);
 
