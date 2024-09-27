@@ -7,12 +7,12 @@ from tqdm import tqdm
 batch_size = 64
 
 # Load the dataset
-dataset = load_dataset("raptorkwok/cantonese_sentences")
-dataset['train'] = dataset['train'].select(range(200000))
-field_name = 'content'
+# dataset = load_dataset("raptorkwok/cantonese_sentences")
+# dataset['train'] = dataset['train'].select(range(200000))
+# field_name = 'content'
 
-# dataset = load_dataset("R5dwMg/zh-wiki-yue-long")
-# field_name = 'text'
+dataset = load_dataset("R5dwMg/zh-wiki-yue-long")
+field_name = 'text'
 
 # Split the dataset into train and val_test
 train_val_test = dataset['train'].train_test_split(test_size=min(20000, int(len(dataset['train']) * 0.1)), seed=42)
