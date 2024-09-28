@@ -37,7 +37,7 @@ print(f"Test size: {len(dataset['test'])}")
 
 
 # Load the ELECTRA model for token classification
-model_name = "finetune-ckip-transformers/electra_base_hkcancor_multi"
+model_name = "../finetune-ckip-transformers/electra_base_hkcancor_multi"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForTokenClassification.from_pretrained(model_name)
 
@@ -111,6 +111,6 @@ dataset_dict = DatasetDict({
 dataset_dict = dataset_dict.filter(lambda example: len(example['chars']) > 0)
 
 # Push to HuggingFace Hub
-dataset_dict.push_to_hub("AlienKevin/lihkg-multi")
+dataset_dict.push_to_hub("AlienKevin/wiki-yue-long-multi")
 
 print("Dataset uploaded successfully!")

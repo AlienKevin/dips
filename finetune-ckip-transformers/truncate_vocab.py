@@ -8,7 +8,7 @@ import opencc
 # load model and tokenizer
 model_id = "electra_small_layers_6_multi"
 
-output_dir = model_id + "_compressed"
+output_dir = model_id + "_truncated"
 os.makedirs(output_dir, exist_ok=True)
 
 feature = "token-classification"
