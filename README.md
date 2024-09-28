@@ -42,6 +42,8 @@ Several fine-tuned models are available on HuggingFace:
 4. ELECTRA Small with top 6 layers dropped, fine-tuned on HKCanCor and Cantonese Wikipedia distilled from ELECTRA Base: [AlienKevin/electra-hongkongese-small-6-dropped-distilled-hkcancor-multi](https://huggingface.co/AlienKevin/electra-hongkongese-small-6-dropped-distilled-hkcancor-multi)
 5. \[RECOMMANDED\] ELECTRA Small with top 6 layers dropped, fine-tuned on HKCanCor and Cantonese Wikipedia distilled from ELECTRA Base, with vocabulary truncated. [AlienKevin/electra-hongkongese-small-6-dropped-distilled-truncated-hkcancor-multi](https://huggingface.co/AlienKevin/electra-hongkongese-small-6-dropped-distilled-truncated-hkcancor-multi). This model achieves the best balance between size and performance. You can use the HuggingFace Transformers library to run this model for segmentation but we further quantized the model to be even smaller and faster. See the deployment section for details.
 
+A note on the tokenizer: Because we mainly deal with Cantonese data written with Chinese characters, we do not need a WordPiece tokenizer. Instead, we just directly split the input into a list of characters, aka a unigram tokenizer. If you run the fine-tuned models above with Transformers, make sure to tokenize the input yourself without using the WordPiece tokenizer.
+
 The `finetune-ckip-transformers` folder is derived from [toastynews/finetune-ckip-transformers](https://github.com/toastynews/finetune-ckip-transformers).
 
 ### Deployment
