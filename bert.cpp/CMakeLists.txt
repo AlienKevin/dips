@@ -26,6 +26,9 @@ option(GGML_FMA                    "ggml: enable FMA"                           
 option(GGML_CUBLAS                 "ggml: use cuBLAS"                                    OFF)
 option(GGML_METAL                  "ggml: use Metal"                                     OFF)
 
+# emscripten specific
+option(EMSCRIPTEN_WASM_ONLY        "emscipten: output wasm file only"                    ON)
+
 #
 # Compile flags
 #
@@ -70,10 +73,17 @@ if (NOT EMSCRIPTEN)
     endif()
 else()
     message(STATUS "Emscripten detected")
-    set(CMAKE_EXECUTABLE_SUFFIX ".js")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s WASM=1 -s USE_PTHREADS=1")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s WASM=1 -s USE_PTHREADS=1")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s WASM=1 -s USE_PTHREADS=1 -s EXPORT_ES6=1 -s PTHREAD_POOL_SIZE_STRICT=0 -s INITIAL_MEMORY=15MB -s TOTAL_MEMORY=15MB -s FORCE_FILESYSTEM=1 -s SINGLE_FILE=1 -s EXPORTED_RUNTIME_METHODS=\"['print', 'printErr', 'ccall', 'cwrap']\"")
+    if (EMSCRIPTEN_WASM_ONLY)
+        set(CMAKE_EXECUTABLE_SUFFIX ".wasm")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s WASM=1 -s USE_PTHREADS=1 -fPIC")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s WASM=1 -s USE_PTHREADS=1 -fPIC")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s WASM=1 -s SIDE_MODULE=2 -s USE_PTHREADS=1 -s INITIAL_MEMORY=15MB -s TOTAL_MEMORY=15MB -s FORCE_FILESYSTEM=1 -s SINGLE_FILE=1 -s EXPORTED_RUNTIME_METHODS=\"['print', 'printErr', 'ccall', 'cwrap']\"")
+    else()
+        set(CMAKE_EXECUTABLE_SUFFIX ".js")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s WASM=1 -s USE_PTHREADS=1")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s WASM=1 -s USE_PTHREADS=1")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s WASM=1 -s USE_PTHREADS=1 -s EXPORT_ES6=1 -s PTHREAD_POOL_SIZE_STRICT=0 -s INITIAL_MEMORY=15MB -s TOTAL_MEMORY=15MB -s FORCE_FILESYSTEM=1 -s SINGLE_FILE=1 -s EXPORTED_RUNTIME_METHODS=\"['print', 'printErr', 'ccall', 'cwrap']\"")
+    endif()
 endif()
 
 #
