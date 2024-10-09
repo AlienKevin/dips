@@ -24,6 +24,8 @@ To build the C++ library for CPU/CUDA/Metal, run the following
 cmake -B build . && make -C build -j
 
 # WASM
+# Set the EMSCRIPTEN_WASM_ONLY option in CMakeLists.txt to ON to compile to a standalone WASM file
+# Set to OFF to compile to a single JS file with glue code
 emcmake cmake -B build . && make -C build -j
 
 # CUDA
