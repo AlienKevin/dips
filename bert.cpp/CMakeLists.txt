@@ -27,7 +27,7 @@ option(GGML_CUBLAS                 "ggml: use cuBLAS"                           
 option(GGML_METAL                  "ggml: use Metal"                                     OFF)
 
 # emscripten specific
-option(EMSCRIPTEN_WASM_ONLY        "emscipten: output wasm file only"                    ON)
+option(EMSCRIPTEN_WASM_ONLY        "emscipten: output wasm file only"                    OFF)
 
 #
 # Compile flags
